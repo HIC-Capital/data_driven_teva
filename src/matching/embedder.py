@@ -1,7 +1,7 @@
 """
 Embedding utilities for thesis matching.
 
-Uses OpenAI text-embedding-3-small — fast, cheap, good for semantic similarity.
+Uses NVIDIA NIM embedding endpoint (nvidia/nv-embedqa-e5-v5).
 Results are cached on disk so re-runs don't re-call the API for unchanged text.
 """
 
@@ -15,6 +15,17 @@ _CACHE_PATH = "data/embeddings_cache.json"
 _cache: dict[str, list[float]] = {}
 _cache_loaded = False
 _cache_dirty = False
+
+NIM_EMBED_MODEL = "nvidia/nv-embedqa-e5-v5"
+NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1"
+
+
+def _get_client():
+    from openai import OpenAI
+    api_key = os.environ.get("NVIDIA_API_KEY") or os.environ.get("NIM_API_KEY")
+    if not api_key:
+        raise RuntimeError("No NVIDIA API key found. Set NVIDIA_API_KEY in .streamlit/secrets.toml")
+    return OpenAI(base_url=NVIDIA_BASE_URL, api_key=api_key)
 
 
 def _load_cache() -> None:
@@ -47,15 +58,18 @@ def embed_text(text: str, client=None) -> list[float]:
     global _cache_dirty
     _load_cache()
 
-    k = _key(text)
+    safe = text.strip() or "N/A"
+    k = _key(safe)
     if k in _cache:
         return _cache[k]
 
     if client is None:
-        from openai import OpenAI
-        client = OpenAI()
+        client = _get_client()
 
-    response = client.embeddings.create(model="text-embedding-3-small", input=text)
+    response = client.embeddings.create(
+        model=NIM_EMBED_MODEL, input=[safe],
+        extra_body={"input_type": "query", "truncate": "END"},
+    )
     vec = response.data[0].embedding
     _cache[k] = vec
     _cache_dirty = True
@@ -72,33 +86,36 @@ def embed_batch(texts: list[str], client=None) -> list[list[float]]:
     _load_cache()
 
     if client is None:
-        from openai import OpenAI
-        client = OpenAI()
+        client = _get_client()
 
     results: list[list[float] | None] = [None] * len(texts)
     missing_indices: list[int] = []
     missing_texts: list[str] = []
 
     for i, text in enumerate(texts):
-        k = _key(text)
+        safe = text.strip() or "N/A"
+        k = _key(safe)
         if k in _cache:
             results[i] = _cache[k]
         else:
             missing_indices.append(i)
-            missing_texts.append(text)
+            missing_texts.append(safe)
 
     if missing_texts:
-        # OpenAI accepts up to 2048 items per request; batch in chunks of 512
-        CHUNK = 512
+        # NIM embedding endpoint: batch in chunks of 96 (safe limit)
+        CHUNK = 96
         api_vecs: list[list[float]] = []
         for start in range(0, len(missing_texts), CHUNK):
             chunk = missing_texts[start : start + CHUNK]
-            resp = client.embeddings.create(model="text-embedding-3-small", input=chunk)
-            # API returns items in the same order as input
+            resp = client.embeddings.create(
+                model=NIM_EMBED_MODEL, input=chunk,
+                extra_body={"input_type": "passage", "truncate": "END"},
+            )
+            resp.data.sort(key=lambda x: x.index)
             api_vecs.extend(item.embedding for item in resp.data)
 
         for j, idx in enumerate(missing_indices):
-            k = _key(texts[idx])
+            k = _key(missing_texts[j])
             _cache[k] = api_vecs[j]
             results[idx] = api_vecs[j]
         _cache_dirty = True

@@ -86,18 +86,8 @@ class MatchResult:
 
 class ThesisMatcher:
 
-    def __init__(self, store, openai_client=None):
-        """
-        Parameters
-        ----------
-        store : ProfileStore
-            Loaded professor profiles.
-        openai_client : openai.OpenAI, optional
-            Shared client — created lazily from OPENAI_API_KEY env var if None.
-            Used for embeddings only. Reranking uses NVIDIA NIM via llm_client.
-        """
+    def __init__(self, store):
         self._store = store
-        self._openai = openai_client
 
     # ------------------------------------------------------------------
     # Public API
@@ -148,7 +138,7 @@ class ThesisMatcher:
 
         print(f"[Stage 1] Embedding student profile…")
         student_text = build_student_matching_text(student)
-        student_vec = embed_text(student_text, client=self._openai_client())
+        student_vec = embed_text(student_text)
 
         professors = self._store.all()
         print(f"[Stage 1] Embedding {len(professors)} professor profiles…")
@@ -156,7 +146,7 @@ class ThesisMatcher:
         prof_texts = [
             build_professor_matching_text(prof.to_dict()) for prof in professors
         ]
-        prof_vecs = embed_batch(prof_texts, client=self._openai_client())
+        prof_vecs = embed_batch(prof_texts)
 
         scored: list[tuple[ProfessorProfile, float]] = []
         for prof, vec in zip(professors, prof_vecs):
@@ -228,16 +218,6 @@ class ThesisMatcher:
 
         print(f"[Stage 2] Reranking complete. {len(final)} results.")
         return final
-
-    # ------------------------------------------------------------------
-    # Lazy client init
-    # ------------------------------------------------------------------
-
-    def _openai_client(self):
-        if self._openai is None:
-            from openai import OpenAI
-            self._openai = OpenAI()
-        return self._openai
 
 
 # ---------------------------------------------------------------------------

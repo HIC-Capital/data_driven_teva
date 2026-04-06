@@ -415,7 +415,8 @@ def _reset_demo_shared():
     _DEMO_SHARED["officially_registered"] = set()
 
 def _is_demo(uid: str) -> bool:
-    return uid in ("demo_student", "demo_prof")
+    """True for demo button logins AND signups when Firebase is not configured."""
+    return uid.startswith("demo_")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # SESSION STATE
@@ -1188,9 +1189,6 @@ def _title_suggestions(area: str) -> list:
 def _run_matching() -> list:
     """Try real pipeline; fall back to demo data."""
     try:
-        import os
-        if not os.environ.get("OPENAI_API_KEY"):
-            raise RuntimeError("No API key")
         from src.data_collection.questionnaire import _build_description
         from src.models.student import StudentProfile
         from src.data_collection.scrapers.constants import RESEARCH_AREA_TO_FIELD_IDS
@@ -1237,7 +1235,9 @@ def _run_matching() -> list:
             )
             for r in raw
         ]
-    except Exception:
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        st.warning(f"[Matching error — falling back to demo] {e}")
         return DEMO_MATCHES
 
 
@@ -1507,18 +1507,18 @@ def page_topics():
             # Recommendations section
             has_profile = bool(s.research_area or s.thesis_title or s.research_question)
             st.markdown('<div class="sec-head">Recommended for you</div>', unsafe_allow_html=True)
-            if s.topic_recs is None:
+            if s.topic_recs_loading:
+                with st.spinner("Ranking topics for your profile…"):
+                    s.topic_recs = _rank_topics_for_student(_filter(ALL_TOPICS))
+                    s.topic_recs_loading = False; st.rerun()
+            elif s.topic_recs is None:
                 if has_profile:
                     if st.button("Get personalised recommendations", key="get_recs_all"):
                         s.topic_recs_loading = True; st.rerun()
                 else:
                     st.markdown('<div style="font-size:0.8rem;color:var(--mut)">Complete your thesis profile to get recommendations.</div>', unsafe_allow_html=True)
-            elif s.topic_recs_loading:
-                with st.spinner("Ranking topics for your profile…"):
-                    s.topic_recs = _rank_topics_for_student(_filter(ALL_TOPICS))
-                    s.topic_recs_loading = False; st.rerun()
             else:
-                for t in s.topic_recs[:5]:
+                for t in s.topic_recs[:3]:
                     _card(t, show_score=True, key_prefix="rec_all")
                 if st.button("Refresh", key="refresh_recs"):
                     s.topic_recs = None; st.rerun()
