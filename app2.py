@@ -823,7 +823,7 @@ def topbar(title, subtitle="", back=False):
         col_back, col_title = st.columns([1, 8])
         with col_back:
             if st.button("← Home", key=f"topbar_home_{title.replace(' ','_')}"):
-                s.page = "Home"; st.rerun()
+                st.session_state["_nav_target"] = "Home"; st.rerun()
         with col_title:
             st.markdown(f"""
             <div class="topbar">
@@ -1018,7 +1018,7 @@ def page_match():
         with col_no_topic:
             st.markdown("<div style='padding-top:0.35rem'></div>", unsafe_allow_html=True)
             if st.button("I don't have a thesis subject yet →", key="no_topic_btn"):
-                s.page = "Thesis Topics"; st.rerun()
+                st.session_state["_nav_target"] = "Thesis Topics"; st.rerun()
 
     # ── Step 1: Approach ──────────────────────────────────────────
     elif step == 1:
@@ -1284,13 +1284,13 @@ def _show_results(ctx):
 
             col_a, col_b, col_c = st.columns([1, 1, 1])
             if col_a.button("View profile", key=f"view_prof_{i}"):
-                s.selected_prof = r["name"]; s.page = "Professors"; st.rerun()
+                s.selected_prof = r["name"]; st.session_state["_nav_target"] = "Professors"; st.rerun()
             if col_b.button("Send message", key=f"msg_prof_{i}"):
                 stud_n = f"{s.first_name} {s.last_name}"
                 conv_k = (r["name"], stud_n)
                 if conv_k not in s.conversations:
                     s.conversations[conv_k] = []
-                s.active_chat = r["name"]; s.page = "Messages"; st.rerun()
+                s.active_chat = r["name"]; st.session_state["_nav_target"] = "Messages"; st.rerun()
             if col_c.button("Draft email →", key=f"email_prof_{i}"):
                 with st.spinner("Writing email…"):
                     try:
@@ -1586,7 +1586,7 @@ def page_topics():
                       academic background to personalise the results.
                     </div>""", unsafe_allow_html=True)
                     if st.button("Go to My Profile →", key="ai_tab_go_profile"):
-                        s.page = "My Profile"; st.rerun()
+                        st.session_state["_nav_target"] = "My Profile"; st.rerun()
                 else:
                     if st.button("Generate 5 topics for my profile", type="primary", key="gen_ai_topics"):
                         s.topic_ai_loading = True; st.rerun()
@@ -1758,7 +1758,7 @@ def page_topics():
                         ck2 = (s.active_chat, stud_n2)
                         if ck2 not in s.conversations:
                             s.conversations[ck2] = []
-                        s.page = "Messages"; st.rerun()
+                        st.session_state["_nav_target"] = "Messages"; st.rerun()
                     elif src == "company":
                         contact = selected.get("contact", "")
                         if contact:
@@ -1906,7 +1906,7 @@ def page_professors():
                 ck3 = (selected["name"], stud_n3)
                 if ck3 not in s.conversations:
                     s.conversations[ck3] = []
-                s.active_chat = selected["name"]; s.page = "Messages"; st.rerun()
+                s.active_chat = selected["name"]; st.session_state["_nav_target"] = "Messages"; st.rerun()
             c2.button("Save to shortlist", key="save_prof")
 
 
@@ -2055,7 +2055,7 @@ def page_messages():
                     st.markdown("<div style='height:0.2rem'></div>", unsafe_allow_html=True)
                     if st.button("Ask AI", key="open_ai_chat_btn"):
                         s.active_prof_ai_chat = active_str
-                        s.page = "Professor AI Chat"; st.rerun()
+                        st.session_state["_nav_target"] = "Professor AI Chat"; st.rerun()
 
             # Messages
             for msg in msgs:
@@ -2188,7 +2188,7 @@ def page_messages():
                         st.rerun()
                 if st.button("Leave feedback", key="leave_feedback_btn"):
                     s.feedback_target = conv_key
-                    s.page = "Feedback"; st.rerun()
+                    st.session_state["_nav_target"] = "Feedback"; st.rerun()
 
             # Professor: view AI chat history in matched view
             if is_prof and is_confirmed:
@@ -2503,7 +2503,7 @@ def page_prof_home():
           <div class="dash-arrow"><span>Upload &amp; extract</span><span>→</span></div>
         </div>""", unsafe_allow_html=True)
         if st.button(" ", key="ph_upload", use_container_width=True):
-            s.page = "Upload Documents"; st.rerun()
+            st.session_state["_nav_target"] = "Upload Documents"; st.rerun()
 
     with c2:
         st.markdown(f"""
@@ -2514,7 +2514,7 @@ def page_prof_home():
           <div class="dash-arrow"><span>View applications</span><span>→</span></div>
         </div>""", unsafe_allow_html=True)
         if st.button(" ", key="ph_apps", use_container_width=True):
-            s.page = "Messages"; st.rerun()
+            st.session_state["_nav_target"] = "Messages"; st.rerun()
 
     with c3:
         st.markdown(f"""
@@ -2525,7 +2525,7 @@ def page_prof_home():
           <div class="dash-arrow"><span>View FAQ bank</span><span>→</span></div>
         </div>""", unsafe_allow_html=True)
         if st.button(" ", key="ph_faq", use_container_width=True):
-            s.page = "Upload Documents"; st.rerun()
+            st.session_state["_nav_target"] = "Upload Documents"; st.rerun()
 
 
 def page_upload_documents():
@@ -2629,7 +2629,7 @@ def page_professor_ai_chat():
 
     # Back button
     if st.button("← Back to messages", key="back_prof_ai"):
-        s.page = "Messages"; st.rerun()
+        st.session_state["_nav_target"] = "Messages"; st.rerun()
 
     st.markdown(f"""
     <div style="display:flex;align-items:center;gap:10px;padding:0.9rem 0;
@@ -2778,7 +2778,7 @@ def page_professor_ai_chat():
 def page_feedback():
     conv_key = s.feedback_target
     if not conv_key:
-        s.page = "Messages"; st.rerun()
+        st.session_state["_nav_target"] = "Messages"; st.rerun()
 
     prof_name = conv_key[0] if conv_key else "Professor"
     topbar("Leave Feedback", f"Your experience with {prof_name}")
@@ -2799,7 +2799,7 @@ def page_feedback():
         if st.button("Edit feedback", key="edit_fb"):
             del s.student_feedback[conv_key]; st.rerun()
         if st.button("← Back to messages", key="fb_back"):
-            s.page = "Messages"; st.rerun()
+            st.session_state["_nav_target"] = "Messages"; st.rerun()
         return
 
     st.markdown(f"""
@@ -2837,7 +2837,7 @@ def page_feedback():
             st.rerun()
     with col_back:
         if st.button("← Back to messages", key="fb_back2"):
-            s.page = "Messages"; st.rerun()
+            st.session_state["_nav_target"] = "Messages"; st.rerun()
 
 # ─────────────────────────────────────────────────────────────────────────────
 # PAGE: THESIS PROJECT  (Trello-style timeline)
@@ -3126,12 +3126,18 @@ with st.sidebar:
             del st.session_state[k]
         st.rerun()
 
-# Special pages not in sidebar nav
-if s.get("page") == "Feedback":
-    page_feedback()
-    st.stop()
-elif s.get("page") == "Professor AI Chat":
-    page_professor_ai_chat()
+# Honour programmatic navigation set by buttons (st.navigation ignores s.page)
+_nav_target = st.session_state.get("_nav_target")
+if _nav_target:
+    del st.session_state["_nav_target"]
+    if   _nav_target == "Home":               page_prof_home() if s.role == "professor" else page_home()
+    elif _nav_target == "Messages":           page_messages()
+    elif _nav_target == "Professors":         page_professors()
+    elif _nav_target == "Thesis Topics":      page_topics()
+    elif _nav_target == "My Profile":         page_profile()
+    elif _nav_target == "Upload Documents":   page_upload_documents()
+    elif _nav_target == "Feedback":           page_feedback()
+    elif _nav_target == "Professor AI Chat":  page_professor_ai_chat()
     st.stop()
 
 nav.run()
