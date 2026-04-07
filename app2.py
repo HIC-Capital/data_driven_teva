@@ -183,10 +183,10 @@ def _ctx(programme: str) -> dict:
     return PROGRAMME_CONTEXT["_default"]
 
 DEMO_MATCHES = [
-    dict(name="Prof. Dr. Michele Ittens", dept="School of Management",
+    dict(name="Prof. Dr. Michèle Müller-Itten", dept="School of Management",
          focus="Innovation Management · Technology Entrepreneurship · Digital Strategy",
          score=9.4, topic=9, method=9,
-         summary="Prof. Ittens's research on corporate innovation and digital transformation maps directly onto your thesis. She regularly supervises empirical and qualitative work on strategy and innovation, and has an open proposal on AI adoption in financial services.",
+         summary="Prof. Müller-Itten's research on corporate innovation and digital transformation maps directly onto your thesis. She regularly supervises empirical and qualitative work on strategy and innovation, and has an open proposal on AI adoption in financial services.",
          strengths=["Digital transformation & innovation expert", "Supervises mixed-method theses", "Open proposal on AI & strategy"],
          flags=[]),
     dict(name="Prof. Dr. Markus Schmid", dept="School of Finance",
@@ -300,12 +300,12 @@ REAL_TOPICS     = _load_topics()
 
 # Fallback demo data if files not found
 _DEMO_PROFESSORS_FALLBACK = [
-    dict(name="Prof. Dr. Michele Ittens", dept="School of Management",
+    dict(name="Prof. Dr. Michèle Müller-Itten", dept="School of Management",
          focus=["Innovation Management", "Digital Strategy", "Technology Entrepreneurship"],
          h_index=18, pubs=87,
          courses=["Corporate Innovation", "Digital Transformation", "Technology Strategy"],
          proposals=["AI Adoption Strategies in Financial Services", "Corporate Venturing and Innovation Output", "Digital Platform Business Models"],
-         email="michele.ittens@unisg.ch", title="Prof. Dr.", profile_url="", career="", education="",
+         email="michele.mueller-itten@unisg.ch", title="Prof. Dr.", profile_url="", career="", education="",
          publications=[
              {"title": "Corporate Innovation Labs: Ambidexterity and Strategic Renewal", "year": 2023, "cited_by_count": 34, "topics": ["Innovation", "Corporate Strategy"]},
              {"title": "Digital Transformation and Firm Performance: A Meta-Analysis", "year": 2022, "cited_by_count": 61, "topics": ["Digital Strategy", "Performance"]},
@@ -366,7 +366,7 @@ DEMO_COMPANY_TOPICS = [
 ALL_TOPICS = TOPICS + DEMO_COMPANY_TOPICS
 
 DEMO_MESSAGES = [
-    dict(professor="Prof. Dr. Michele Ittens", avatar="MI",
+    dict(professor="Prof. Dr. Michèle Müller-Itten", avatar="MI",
          last="Thank you for reaching out. Your topic on AI adoption sounds very relevant to my current research.",
          time="1h ago", unread=True),
     dict(professor="Prof. Dr. Markus Schmid", avatar="MS",
@@ -380,7 +380,7 @@ DEMO_MESSAGES = [
 # Pre-seeded conversations (populated into session state on first load)
 def _make_demo_conversations():
     return {
-        ("Prof. Dr. Michele Ittens", "Anna Müller"): [],
+        ("Prof. Dr. Michèle Müller-Itten", "Anna Müller"): [],
         ("Prof. Dr. Markus Schmid", "Anna Müller"): [
             {"sender": "student", "text": "Dear Prof. Schmid, I came across your research on corporate governance and ESG and I believe there is strong alignment with my thesis on ESG disclosure quality and the cost of debt. I would be very grateful for the opportunity to discuss potential supervision.", "time": "10:15"},
             {"sender": "professor", "text": "Thank you for your application. Could you share a short outline of your research question and the data sources you plan to use?", "time": "11:02"},
@@ -450,7 +450,7 @@ def _init_state():
         prof_dept="",
         prof_email="",
         prof_uploaded_docs=[{
-            "professor_name": "Prof. Dr. Michele Ittens",
+            "professor_name": "Prof. Dr. Michèle Müller-Itten",
             "document_name": "Innovation Management Course Syllabus.pdf",
             "document_type": "course_material",
             "thesis_proposals": [
@@ -466,7 +466,7 @@ def _init_state():
             "key_topics": ["Innovation Management", "Digital Transformation", "AI Strategy", "Corporate Venturing"],
             "courses": ["Corporate Innovation", "Digital Transformation"],
             "summary": "Course syllabus for Corporate Innovation — extracted thesis proposals, FAQ entries, and supervision requirements.",
-            "raw_insights": "Prof. Ittens expects a 1-page outline before the first meeting. She prefers students who have taken Corporate Innovation or a related course. Usually responds within 2–3 days.",
+            "raw_insights": "Prof. Müller-Itten expects a 1-page outline before the first meeting. She prefers students who have taken Corporate Innovation or a related course. Usually responds within 2–3 days.",
         }],
         prof_faq_bank=[
             {"question": "What thesis topics do you supervise?", "answer": "Corporate innovation, digital transformation, and technology entrepreneurship. Open to quantitative and qualitative approaches."},
@@ -598,7 +598,7 @@ def page_auth():
             _enter_demo_student()
             st.rerun()
     with col2:
-        if st.button("Professor Demo\nProf. Dr. Ittens", use_container_width=True, key="btn_demo_prof"):
+        if st.button("Professor Demo\nProf. Dr. Müller-Itten", use_container_width=True, key="btn_demo_prof"):
             _enter_demo_professor()
             st.rerun()
 
@@ -635,15 +635,15 @@ def _enter_demo_student():
 
 
 def _enter_demo_professor():
-    """Log in as the demo professor (Prof. Dr. Michele Ittens) without Firebase."""
+    """Log in as the demo professor (Prof. Dr. Michèle Müller-Itten) without Firebase."""
     profile = {
         "role": "professor",
-        "first_name": "", "last_name": "", "email": "michele.ittens@unisg.ch",
+        "first_name": "", "last_name": "", "email": "michele.mueller-itten@unisg.ch",
         "level": "", "programme": "", "semester": "", "language": "",
-        "prof_name":  "Michele Ittens",
+        "prof_name":  "Michèle Müller-Itten",
         "prof_title": "Prof. Dr.",
         "prof_dept":  "School of Management",
-        "prof_email": "michele.ittens@unisg.ch",
+        "prof_email": "michele.mueller-itten@unisg.ch",
     }
     st.session_state.firebase_user = {"uid": "demo_prof", "email": profile["email"], "token": ""}
     _apply_profile_to_state(profile)
