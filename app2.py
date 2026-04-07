@@ -2133,7 +2133,9 @@ def page_messages():
                 with col_conf:
                     if not is_confirmed:
                         if st.button("Confirm Match", type="secondary", key="confirm_match_btn"):
-                            s.confirmed_matches.add(conv_key); st.rerun()
+                            s.confirmed_matches.add(conv_key)
+                            _DEMO_SHARED["confirmed_matches"].add(conv_key)
+                            st.rerun()
                     else:
                         st.markdown('<span style="background:#dcfce7;color:#166534;font-size:0.78rem;font-weight:700;padding:4px 10px">Matched</span>', unsafe_allow_html=True)
 
