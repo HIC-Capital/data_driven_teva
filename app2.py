@@ -2382,6 +2382,9 @@ def page_profile():
 def page_ai_assistant():
     topbar("AI Assistant", "Personalised thesis advisor")
 
+    if st.session_state.pop("_ai_input_clear", False):
+        st.session_state["ai_input_box"] = ""
+
     from src.agents.faq_agent import chat, build_student_context
 
     st.markdown("""
@@ -2460,6 +2463,7 @@ def page_ai_assistant():
                     ctx_str = build_student_context(s)
                     reply = chat(user_input.strip(), s.ai_chat_history[:-1], ctx_str)
                 s.ai_chat_history.append({"role": "assistant", "content": reply})
+                st.session_state["_ai_input_clear"] = True
                 st.rerun()
     with col_clear:
         if st.button("Clear", key="ai_clear_btn"):
