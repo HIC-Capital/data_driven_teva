@@ -2077,6 +2077,7 @@ def page_messages():
                         msgs.append({"sender": sender_role, "text": txt,
                                      "time": _dt.now().strftime("%H:%M")})
                         st.session_state["_msg_clear"] = True
+                        st.session_state["_nav_target"] = "Messages"
                         st.rerun()
 
             # Student AI draft: only active before first student message (intro email)
@@ -2464,6 +2465,7 @@ def page_ai_assistant():
                     reply = chat(user_input.strip(), s.ai_chat_history[:-1], ctx_str)
                 s.ai_chat_history.append({"role": "assistant", "content": reply})
                 st.session_state["_ai_input_clear"] = True
+                st.session_state["_nav_target"] = "AI Assistant"
                 st.rerun()
     with col_clear:
         if st.button("Clear", key="ai_clear_btn"):
@@ -3140,6 +3142,7 @@ if _nav_target:
     elif _nav_target == "Thesis Topics":      page_topics()
     elif _nav_target == "My Profile":         page_profile()
     elif _nav_target == "Upload Documents":   page_upload_documents()
+    elif _nav_target == "AI Assistant":        page_ai_assistant()
     elif _nav_target == "Feedback":           page_feedback()
     elif _nav_target == "Professor AI Chat":  page_professor_ai_chat()
     st.stop()
