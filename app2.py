@@ -719,7 +719,7 @@ st.markdown("""
 .detail-sub  { font-size:0.82rem; color:var(--mut); margin-top:2px; }
 .msg-row { display:flex; gap:8px; margin-bottom:10px; align-items:flex-start; }
 .msg-av  { width:30px; height:30px; background:var(--gm); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:0.72rem; color:var(--gd); flex-shrink:0; }
-.bubble  { background:var(--bg); border:1px solid var(--bdr); padding:0.55rem 0.8rem; font-size:0.85rem; color:var(--txt); max-width:82%; line-height:1.5; word-break:break-word; white-space:pre-wrap; }
+.bubble  { background:var(--bg); border:1px solid var(--bdr); padding:0.55rem 0.8rem; font-size:0.85rem; color:var(--txt); max-width:82%; min-width:2.5rem; line-height:1.5; word-break:break-word; white-space:pre-wrap; }
 .bubble.mine { background:var(--gl); border-color:var(--gm); }
 .msg-t   { font-size:0.68rem; color:var(--mut); margin-top:2px; }
 .topbar { padding:0 0 1rem; margin-bottom:1.2rem; border-bottom:1px solid var(--bdr); }
