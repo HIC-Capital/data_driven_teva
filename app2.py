@@ -2074,8 +2074,11 @@ def page_messages():
                 if st.button("Send →", type="primary", key="send_live_msg"):
                     txt = st.session_state.get("chat_msg_input", "").strip()
                     if txt:
-                        msgs.append({"sender": sender_role, "text": txt,
-                                     "time": _dt.now().strftime("%H:%M")})
+                        s.conversations[conv_key].append({
+                            "sender": sender_role,
+                            "text": txt,
+                            "time": _dt.now().strftime("%H:%M"),
+                        })
                         st.session_state["_msg_clear"] = True
                         st.rerun()
 
