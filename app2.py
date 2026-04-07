@@ -1947,14 +1947,18 @@ def page_messages():
     if st.session_state.pop("_msg_clear", False):
         st.session_state["chat_msg_input"] = ""
 
+    _is_demo_user = _is_demo(s.firebase_user.get("uid", ""))
+    _convs_dict   = _DEMO_SHARED["conversations"]   if _is_demo_user else s.conversations
+    _matches_set  = _DEMO_SHARED["confirmed_matches"] if _is_demo_user else s.confirmed_matches
+
     left, right = st.columns([2, 3], gap="medium")
 
     # ── LEFT PANEL ────────────────────────────────────────────────────────────
     with left:
         if is_prof:
-            prof_convs = [(k, v) for k, v in s.conversations.items() if k[0] == prof_display]
-            pending  = [(k, v) for k, v in prof_convs if k not in s.confirmed_matches]
-            matched  = [(k, v) for k, v in prof_convs if k in s.confirmed_matches]
+            prof_convs = [(k, v) for k, v in _convs_dict.items() if k[0] == prof_display]
+            pending  = [(k, v) for k, v in prof_convs if k not in _matches_set]
+            matched  = [(k, v) for k, v in prof_convs if k in _matches_set]
 
             tab_app, tab_mat = st.tabs([f"Applications ({len(pending)})", f"Matched ({len(matched)})"])
 
@@ -1989,7 +1993,7 @@ def page_messages():
                     _prof_list_item(ck, msgs, "mat")
 
         else:
-            stud_convs = [(k, v) for k, v in s.conversations.items() if k[1] == stud_name]
+            stud_convs = [(k, v) for k, v in _convs_dict.items() if k[1] == stud_name]
             st.markdown('<div class="sec-head">Professors</div>', unsafe_allow_html=True)
             if not stud_convs:
                 st.markdown('<div style="font-size:0.85rem;color:var(--mut);padding:1rem 0">No conversations yet — match with a supervisor and send a message.</div>', unsafe_allow_html=True)
@@ -1998,7 +2002,7 @@ def page_messages():
                 last_txt = (msgs[-1]["text"][:55] + "…") if msgs else ""
                 unread = bool(msgs and msgs[-1]["sender"] == "professor")
                 udot = ' <span style="display:inline-block;width:7px;height:7px;background:#EF4444;border-radius:50%;margin-left:4px;vertical-align:middle"></span>' if unread else ""
-                is_conf = (pname, stud_name) in s.confirmed_matches
+                is_conf = (pname, stud_name) in _matches_set
                 conf_badge = ' <span style="background:#dcfce7;color:#166534;font-size:0.62rem;font-weight:700;padding:1px 5px;margin-left:4px">Matched</span>' if is_conf else ""
                 active_cls3 = "list-item active" if is_active else "list-item"
                 st.markdown(f"""
@@ -2021,10 +2025,10 @@ def page_messages():
             </div>""", unsafe_allow_html=True)
         else:
             conv_key = (prof_display, active_str) if is_prof else (active_str, stud_name)
-            if conv_key not in s.conversations:
-                s.conversations[conv_key] = []
-            msgs = s.conversations[conv_key]
-            is_confirmed = conv_key in s.confirmed_matches
+            if conv_key not in _convs_dict:
+                _convs_dict[conv_key] = []
+            msgs = _convs_dict[conv_key]
+            is_confirmed = conv_key in _matches_set
 
             if is_prof:
                 other_name    = active_str
@@ -2074,7 +2078,7 @@ def page_messages():
                 if st.button("Send →", type="primary", key="send_live_msg"):
                     txt = st.session_state.get("chat_msg_input", "").strip()
                     if txt:
-                        s.conversations[conv_key].append({
+                        _convs_dict[conv_key].append({
                             "sender": sender_role,
                             "text": txt,
                             "time": _dt.now().strftime("%H:%M"),
@@ -2133,8 +2137,7 @@ def page_messages():
                 with col_conf:
                     if not is_confirmed:
                         if st.button("Confirm Match", type="secondary", key="confirm_match_btn"):
-                            s.confirmed_matches.add(conv_key)
-                            _DEMO_SHARED["confirmed_matches"].add(conv_key)
+                            _matches_set.add(conv_key)
                             st.rerun()
                     else:
                         st.markdown('<span style="background:#dcfce7;color:#166534;font-size:0.78rem;font-weight:700;padding:4px 10px">Matched</span>', unsafe_allow_html=True)
