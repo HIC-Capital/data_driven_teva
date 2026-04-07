@@ -394,18 +394,21 @@ def _make_demo_conversations():
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# DEMO SHARED STORE  (module-level — survives across Streamlit sessions)
-#
-# Both demo accounts (student + professor) point to the SAME dict objects
-# here. Since Python dicts are mutable and stored by reference, mutations
-# from one browser tab are immediately visible in the other.
+# DEMO SHARED STORE
+# @st.cache_resource ensures this is created ONCE per server process and
+# reused across all reruns and browser tabs. Without it, the module-level
+# dict would reset on every rerun, losing all appended messages.
 # ─────────────────────────────────────────────────────────────────────────────
-_DEMO_SHARED = {
-    "conversations":      _make_demo_conversations(),
-    "confirmed_matches":  set(),
-    "student_feedback":   {},
-    "officially_registered": set(),
-}
+@st.cache_resource
+def _get_demo_shared():
+    return {
+        "conversations":        _make_demo_conversations(),
+        "confirmed_matches":    set(),
+        "student_feedback":     {},
+        "officially_registered": set(),
+    }
+
+_DEMO_SHARED = _get_demo_shared()
 
 def _reset_demo_shared():
     """Restore all demo shared data to initial state."""
