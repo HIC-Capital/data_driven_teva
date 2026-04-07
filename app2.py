@@ -2077,7 +2077,6 @@ def page_messages():
                         msgs.append({"sender": sender_role, "text": txt,
                                      "time": _dt.now().strftime("%H:%M")})
                         st.session_state["_msg_clear"] = True
-                        st.session_state["_nav_target"] = "Messages"
                         st.rerun()
 
             # Student AI draft: only active before first student message (intro email)
@@ -2465,7 +2464,6 @@ def page_ai_assistant():
                     reply = chat(user_input.strip(), s.ai_chat_history[:-1], ctx_str)
                 s.ai_chat_history.append({"role": "assistant", "content": reply})
                 st.session_state["_ai_input_clear"] = True
-                st.session_state["_nav_target"] = "AI Assistant"
                 st.rerun()
     with col_clear:
         if st.button("Clear", key="ai_clear_btn"):
@@ -3093,29 +3091,36 @@ section[data-testid="stSidebar"] hr { border-color: rgba(255,255,255,0.25) !impo
 </style>
 """, unsafe_allow_html=True)
 
+def _unpin(fn):
+    """Wrap a page function so clicking it in the sidebar clears _pinned_page."""
+    def _wrapper():
+        st.session_state.pop("_pinned_page", None)
+        fn()
+    return _wrapper
+
 if s.role == "professor":
     nav = st.navigation({
         "Professor Portal": [
-            st.Page(page_prof_home,         title="Dashboard",            default=True),
-            st.Page(page_messages,          title="Student Applications"),
-            st.Page(page_upload_documents,  title="Upload Documents"),
-            st.Page(page_ai_assistant,      title="AI Assistant"),
+            st.Page(_unpin(page_prof_home),        title="Dashboard",            default=True),
+            st.Page(_unpin(page_messages),         title="Student Applications"),
+            st.Page(_unpin(page_upload_documents), title="Upload Documents"),
+            st.Page(_unpin(page_ai_assistant),     title="AI Assistant"),
         ]
     }, position="sidebar")
 else:
     nav = st.navigation({
         "Student Portal": [
-            st.Page(page_home,              title="Dashboard",        default=True),
+            st.Page(_unpin(page_home),             title="Dashboard",        default=True),
         ],
         "Discover": [
-            st.Page(page_match,             title="Find Supervisor"),
-            st.Page(page_topics,            title="Thesis Topics"),
-            st.Page(page_professors,        title="Professors"),
+            st.Page(_unpin(page_match),            title="Find Supervisor"),
+            st.Page(_unpin(page_topics),           title="Thesis Topics"),
+            st.Page(_unpin(page_professors),       title="Professors"),
         ],
         "My Work": [
-            st.Page(page_messages,          title="Messages"),
-            st.Page(page_ai_assistant,      title="AI Assistant"),
-            st.Page(page_profile,           title="My Profile"),
+            st.Page(_unpin(page_messages),         title="Messages"),
+            st.Page(_unpin(page_ai_assistant),     title="AI Assistant"),
+            st.Page(_unpin(page_profile),          title="My Profile"),
         ],
     }, position="sidebar")
 
@@ -3132,19 +3137,23 @@ with st.sidebar:
             del st.session_state[k]
         st.rerun()
 
-# Honour programmatic navigation set by buttons (st.navigation ignores s.page)
-_nav_target = st.session_state.get("_nav_target")
-if _nav_target:
-    del st.session_state["_nav_target"]
-    if   _nav_target == "Home":               page_prof_home() if s.role == "professor" else page_home()
-    elif _nav_target == "Messages":           page_messages()
-    elif _nav_target == "Professors":         page_professors()
-    elif _nav_target == "Thesis Topics":      page_topics()
-    elif _nav_target == "My Profile":         page_profile()
-    elif _nav_target == "Upload Documents":   page_upload_documents()
-    elif _nav_target == "AI Assistant":        page_ai_assistant()
-    elif _nav_target == "Feedback":           page_feedback()
-    elif _nav_target == "Professor AI Chat":  page_professor_ai_chat()
+# Persistent programmatic navigation — survives internal reruns until the user
+# clicks a real sidebar link (which sets _clear_pinned via nav page wrappers).
+if st.session_state.get("_nav_target"):
+    st.session_state["_pinned_page"] = st.session_state.pop("_nav_target")
+
+_pinned = st.session_state.get("_pinned_page")
+if _pinned:
+    if   _pinned == "Home":               page_prof_home() if s.role == "professor" else page_home()
+    elif _pinned == "Messages":           page_messages()
+    elif _pinned == "Professors":         page_professors()
+    elif _pinned == "Thesis Topics":      page_topics()
+    elif _pinned == "My Profile":         page_profile()
+    elif _pinned == "Upload Documents":   page_upload_documents()
+    elif _pinned == "AI Assistant":       page_ai_assistant()
+    elif _pinned == "Feedback":           page_feedback()
+    elif _pinned == "Professor AI Chat":  page_professor_ai_chat()
+    else:                                 st.session_state.pop("_pinned_page", None)
     st.stop()
 
 nav.run()
