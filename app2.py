@@ -3096,6 +3096,7 @@ def _unpin(fn):
     def _wrapper():
         st.session_state.pop("_pinned_page", None)
         fn()
+    _wrapper.__name__ = fn.__name__
     return _wrapper
 
 if s.role == "professor":
