@@ -942,10 +942,6 @@ def _step_dots(step):
 def page_match():
     topbar("Find Supervisor", "AI-powered matching")
 
-    applied_title = st.session_state.pop("_topic_applied", None)
-    if applied_title:
-        st.success(f"✓ Topic applied: **{applied_title}** — your profile is pre-filled below. Start matching!")
-
     ctx = _ctx(s.programme)
 
     # If we have results, show them
@@ -1810,7 +1806,7 @@ def page_topics():
                         s.keywords = ", ".join(kws) if isinstance(kws, list) else kws
                         s.research_area     = kws[0] if kws else s.research_area
                         st.session_state["_topic_applied"] = s.thesis_title
-                        st.session_state["_nav_target"] = "Find Supervisor"
+                        st.session_state["_nav_target"] = "My Profile"
                         st.rerun()
             with ac2:
                 url = selected.get("url", "")
@@ -2261,6 +2257,10 @@ def page_messages():
 
 def page_profile():
     topbar("My Profile", "Synced with your studyond account")
+
+    applied_title = st.session_state.pop("_topic_applied", None)
+    if applied_title:
+        st.success(f"✓ Topic applied: **{applied_title}** — your thesis fields are pre-filled below.")
 
     # Missing fields notifications
     if missing:
