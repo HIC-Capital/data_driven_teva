@@ -119,10 +119,17 @@ if should_run(3):
         print("STEP 3 — Compass")
         print("=" * 50)
         targets = list(professors.keys()) if force else needs_courses
+        MAX_COURSES = 50
+        total_courses = sum(len(d.get("courses", [])) for d in professors.values())
         for name in targets:
+            if total_courses >= MAX_COURSES:
+                print(f"[step 3] Reached {MAX_COURSES} courses limit — stopping.")
+                break
             result = scrape_professor_courses(name, num_semesters=2)
             if result:
                 professors[name]["courses"] = result["courses"]
+                total_courses += len(result["courses"])
+                _save(PROFESSORS_CACHE, professors)  # save after each professor
         _save(PROFESSORS_CACHE, professors)
 
 
