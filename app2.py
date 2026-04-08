@@ -1744,7 +1744,8 @@ def page_topics():
             st.markdown("<br>", unsafe_allow_html=True)
             ac1, ac2 = st.columns(2)
             with ac1:
-                if st.button("Express Interest", type="primary", key="express_interest_btn"):
+                btn_label = "Use this topic →" if src == "ai" else "Express Interest"
+                if st.button(btn_label, type="primary", key="express_interest_btn"):
                     if src == "professor" and selected.get("professor"):
                         # Navigate to Messages pre-selecting the professor
                         # Try to match professor name to PROFESSORS list
@@ -1769,7 +1770,14 @@ def page_topics():
                         else:
                             st.info("Check the company's careers page for application instructions.")
                     else:
-                        st.info("Use this topic as a starting point for your professor matching.")
+                        # AI-generated topic — apply to thesis profile
+                        s.thesis_title      = selected.get("title", "")
+                        s.research_question = selected.get("description", "")
+                        s.approach          = selected.get("method", "")
+                        kws = selected.get("fields", [])
+                        s.keywords = ", ".join(kws) if isinstance(kws, list) else kws
+                        st.success("Topic added to your thesis profile! Go to **Find Supervisor** to match.")
+                        st.rerun()
             with ac2:
                 url = selected.get("url", "")
                 if url:
