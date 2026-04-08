@@ -942,6 +942,10 @@ def _step_dots(step):
 def page_match():
     topbar("Find Supervisor", "AI-powered matching")
 
+    applied_title = st.session_state.pop("_topic_applied", None)
+    if applied_title:
+        st.success(f"✓ Topic applied: **{applied_title}** — your profile is pre-filled below. Start matching!")
+
     ctx = _ctx(s.programme)
 
     # If we have results, show them
