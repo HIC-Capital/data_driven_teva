@@ -942,6 +942,10 @@ def _step_dots(step):
 def page_match():
     topbar("Find Supervisor", "AI-powered matching")
 
+    applied_title = st.session_state.pop("_topic_applied", None)
+    if applied_title:
+        st.success(f"✓ Topic applied: **{applied_title}** — your profile is pre-filled below. Start matching!")
+
     ctx = _ctx(s.programme)
 
     # If we have results, show them
@@ -1804,7 +1808,9 @@ def page_topics():
                         s.approach          = selected.get("method", "")
                         kws = selected.get("fields", [])
                         s.keywords = ", ".join(kws) if isinstance(kws, list) else kws
-                        st.success("Topic added to your thesis profile! Go to **Find Supervisor** to match.")
+                        s.research_area     = kws[0] if kws else s.research_area
+                        st.session_state["_topic_applied"] = s.thesis_title
+                        st.session_state["_nav_target"] = "Find Supervisor"
                         st.rerun()
             with ac2:
                 url = selected.get("url", "")
