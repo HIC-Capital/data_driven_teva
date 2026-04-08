@@ -723,6 +723,20 @@ st.markdown("""
 .bubble.mine { background:var(--gl); border-color:var(--gm); }
 .msg-t   { font-size:0.68rem; color:var(--mut); margin-top:2px; }
 .topbar { padding:0 0 1rem; margin-bottom:1.2rem; border-bottom:1px solid var(--bdr); }
+@keyframes ai-pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.7;transform:scale(1.06)} }
+@keyframes ai-dots { 0%{content:'.'} 33%{content:'..'} 66%{content:'...'} 100%{content:'.'} }
+.ai-running-banner {
+  display:flex; align-items:center; gap:12px;
+  background:#FFF0F0; border:1.5px solid #F87171;
+  padding:0.75rem 1.1rem; margin-bottom:1rem;
+  animation: ai-pulse 1.4s ease-in-out infinite;
+}
+.ai-running-banner .ai-bug {
+  font-size:1.6rem; line-height:1;
+}
+.ai-running-banner .ai-text {
+  font-size:0.88rem; font-weight:600; color:#B91C1C;
+}
 .element-container:has(.list-item) + .element-container > div > div > button,
 .element-container:has(.list-item) + .element-container .stButton > button { display:none !important; }
 .element-container:has(.topic-card) + .element-container + .element-container > div > div > button,
@@ -816,6 +830,20 @@ _components.html("""
 """, height=0, scrolling=False)
 
 
+
+
+import contextlib
+
+@contextlib.contextmanager
+def ai_spinner(label: str):
+    """Drop-in replacement for st.spinner that also shows the red bug banner."""
+    st.markdown(f"""
+    <div class="ai-running-banner">
+      <span class="ai-bug">🪲</span>
+      <span class="ai-text">AI is working — {label}</span>
+    </div>""", unsafe_allow_html=True)
+    with st.spinner(label):
+        yield
 
 
 def topbar(title, subtitle="", back=False):
@@ -978,7 +1006,7 @@ def page_match():
             if not gen_interests.strip():
                 st.error("Please describe your interests first.")
             else:
-                with st.spinner("Generating ideas…"):
+                with ai_spinner("Generating ideas…"):
                     try:
                         from src.agents.thesis_generator import generate_thesis_ideas
                         s.thesis_ideas = generate_thesis_ideas(
@@ -1082,7 +1110,7 @@ def page_match():
             st.markdown(f'<div style="font-size:0.78rem;margin-bottom:4px">Grade transcript &nbsp;<span style="color:{t_color};font-weight:600">{transcript_status}</span></div>', unsafe_allow_html=True)
             transcript_file = st.file_uploader("Upload transcript PDF", type=["pdf"], key="transcript_up", label_visibility="collapsed")
             if transcript_file:
-                with st.spinner("Scanning transcript…"):
+                with ai_spinner("Scanning transcript…"):
                     try:
                         from src.data_collection.student_parsers.transcript_parser import parse_transcript
                         import tempfile, os
@@ -1100,7 +1128,7 @@ def page_match():
             st.markdown(f'<div style="font-size:0.78rem;margin-bottom:4px">CV / résumé &nbsp;<span style="color:{cv_color};font-weight:600">{cv_status}</span></div>', unsafe_allow_html=True)
             cv_file = st.file_uploader("Upload CV PDF", type=["pdf"], key="cv_up", label_visibility="collapsed")
             if cv_file:
-                with st.spinner("Scanning CV…"):
+                with ai_spinner("Scanning CV…"):
                     try:
                         from src.data_collection.student_parsers.cv_parser import parse_cv
                         import tempfile, os
@@ -1118,7 +1146,7 @@ def page_match():
             s.match_step = 1; st.rerun()
         if c2.button("Find my supervisor →", type="primary", key="step2_run"):
             s.match_step = 3
-            with st.spinner("Running semantic search + AI analysis… (20–30 sec)"):
+            with ai_spinner("Running semantic search + AI analysis… (20–30 sec)"):
                 s.match_results = _run_matching()
             st.rerun()
 
@@ -1295,7 +1323,7 @@ def _show_results(ctx):
                     s.conversations[conv_k] = []
                 s.active_chat = r["name"]; st.session_state["_nav_target"] = "Messages"; st.rerun()
             if col_c.button("Draft email →", key=f"email_prof_{i}"):
-                with st.spinner("Writing email…"):
+                with ai_spinner("Writing email…"):
                     try:
                         from src.agents.email_writer import draft_email
                         draft = draft_email(
@@ -1511,7 +1539,7 @@ def page_topics():
             has_profile = bool(s.research_area or s.thesis_title or s.research_question)
             st.markdown('<div class="sec-head">Recommended for you</div>', unsafe_allow_html=True)
             if s.topic_recs_loading:
-                with st.spinner("Ranking topics for your profile…"):
+                with ai_spinner("Ranking topics for your profile…"):
                     s.topic_recs = _rank_topics_for_student(_filter(ALL_TOPICS))
                     s.topic_recs_loading = False; st.rerun()
             elif s.topic_recs is None:
@@ -1594,7 +1622,7 @@ def page_topics():
                     if st.button("Generate 5 topics for my profile", type="primary", key="gen_ai_topics"):
                         s.topic_ai_loading = True; st.rerun()
             elif s.topic_ai_loading:
-                with st.spinner("Generating personalised thesis topics…"):
+                with ai_spinner("Generating personalised thesis topics…"):
                     try:
                         from src.agents.thesis_generator import generate_thesis_ideas
                         raw = generate_thesis_ideas(
@@ -2111,7 +2139,7 @@ def page_messages():
                 elif st.button("AI draft", key="ai_draft_btn"):
                     last_in = next((m["text"] for m in reversed(msgs) if m["sender"] != sender_role), "")
                     target = last_in or ("their thesis supervision request" if is_prof else "")
-                    with st.spinner("Drafting…"):
+                    with ai_spinner("Drafting…"):
                         try:
                             if is_prof:
                                 from src.agents.faq_agent import draft_professor_reply
@@ -2319,7 +2347,7 @@ def page_profile():
             st.markdown('<div style="font-size:0.83rem;color:var(--mut);margin-bottom:0.6rem">Upload your grade transcript to automatically identify your strongest academic areas. This improves match quality without adding more questions.</div>', unsafe_allow_html=True)
             tf = st.file_uploader("Upload transcript PDF", type=["pdf"], key="profile_transcript_up")
             if tf:
-                with st.spinner("Scanning transcript…"):
+                with ai_spinner("Scanning transcript…"):
                     try:
                         from src.data_collection.student_parsers.transcript_parser import parse_transcript
                         import tempfile, os
@@ -2351,7 +2379,7 @@ def page_profile():
             st.markdown('<div style="font-size:0.83rem;color:var(--mut);margin-bottom:0.6rem">Upload your CV to extract skills and work experience. Used to match you with supervisors whose research complements your professional background.</div>', unsafe_allow_html=True)
             cf = st.file_uploader("Upload CV PDF", type=["pdf"], key="profile_cv_up")
             if cf:
-                with st.spinner("Scanning CV…"):
+                with ai_spinner("Scanning CV…"):
                     try:
                         from src.data_collection.student_parsers.cv_parser import parse_cv
                         import tempfile, os
@@ -2427,7 +2455,7 @@ def page_ai_assistant():
         with col:
             if st.button(sq, key=f"sugg_{j}"):
                 s.ai_chat_history.append({"role": "user", "content": sq})
-                with st.spinner("Thinking…"):
+                with ai_spinner("Thinking…"):
                     ctx_str = build_student_context(s)
                     reply = chat(sq, s.ai_chat_history[:-1], ctx_str)
                 s.ai_chat_history.append({"role": "assistant", "content": reply})
@@ -2478,7 +2506,7 @@ def page_ai_assistant():
         if st.button("Send →", type="primary", key="ai_send_btn"):
             if user_input.strip():
                 s.ai_chat_history.append({"role": "user", "content": user_input.strip()})
-                with st.spinner("Thinking…"):
+                with ai_spinner("Thinking…"):
                     ctx_str = build_student_context(s)
                     reply = chat(user_input.strip(), s.ai_chat_history[:-1], ctx_str)
                 s.ai_chat_history.append({"role": "assistant", "content": reply})
@@ -2571,7 +2599,7 @@ def page_upload_documents():
     )
 
     if uploaded:
-        with st.spinner(f"Reading {uploaded.name} and extracting information…"):
+        with ai_spinner(f"Reading {uploaded.name} and extracting information…"):
             try:
                 from src.agents.professor_import_agent import extract_text_from_file, import_professor_document
                 raw_text = extract_text_from_file(uploaded)
@@ -2735,7 +2763,7 @@ def page_professor_ai_chat():
             with col:
                 if st.button(sq, key=f"prof_sugg_{j}"):
                     history.append({"role": "user", "content": sq})
-                    with st.spinner("Answering…"):
+                    with ai_spinner("Answering…"):
                         from src.agents.professor_chat_agent import ask_professor_ai
                         reply = ask_professor_ai(sq, history[:-1], system)
                     history.append({"role": "assistant", "content": reply})
@@ -2780,7 +2808,7 @@ def page_professor_ai_chat():
             if user_q.strip():
                 q = user_q.strip()
                 history.append({"role": "user", "content": q})
-                with st.spinner("Answering…"):
+                with ai_spinner("Answering…"):
                     try:
                         from src.agents.professor_chat_agent import ask_professor_ai
                         reply = ask_professor_ai(q, history[:-1], system)
