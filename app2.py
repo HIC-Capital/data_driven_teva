@@ -495,6 +495,9 @@ def _init_state():
         topic_recs_loading=False,
         topic_ai_generated=None,
         topic_ai_loading=False,
+        course_recs=None,
+        course_recs_loading=False,
+        course_recs_topic="",
         # Professor browse
         selected_prof=None,
         prof_search="",
@@ -1042,6 +1045,15 @@ def page_match():
                         s.thesis_ideas = None
                         st.rerun()
 
+        # Course recommendations based on current thesis title
+        if s.thesis_title and s.research_question:
+            kws_list = [k.strip() for k in s.keywords.split(",") if k.strip()] if s.keywords else []
+            _course_recs_panel(
+                thesis_title=s.thesis_title,
+                thesis_description=s.research_question,
+                keywords=kws_list,
+            )
+
         st.markdown("<br>", unsafe_allow_html=True)
         col_next, col_no_topic = st.columns([2, 3])
         with col_next:
@@ -1443,6 +1455,58 @@ def _rank_topics_for_student(topics: list) -> list:
         return topics
 
 
+def _course_recs_panel(thesis_title: str, thesis_description: str = "", keywords=None):
+    """
+    Reusable panel: shows course recommendations for a thesis topic.
+    Can be embedded anywhere after a topic is confirmed.
+    """
+    topic_key = thesis_title.strip()
+    # Reset if topic changed
+    if s.course_recs_topic != topic_key:
+        s.course_recs = None
+        s.course_recs_loading = False
+        s.course_recs_topic = topic_key
+
+    st.markdown('<div class="sec-head" style="margin-top:1.2rem">Recommended courses for this topic</div>', unsafe_allow_html=True)
+
+    if s.course_recs_loading:
+        with ai_spinner("Finding relevant courses…"):
+            try:
+                from src.agents.course_recommender import recommend_courses
+                s.course_recs = recommend_courses(
+                    thesis_title=thesis_title,
+                    thesis_description=thesis_description,
+                    keywords=keywords or [],
+                    top_k=5,
+                )
+            except Exception as e:
+                st.warning(f"Could not load course recommendations: {e}")
+                s.course_recs = []
+            finally:
+                s.course_recs_loading = False
+        st.rerun()
+
+    elif s.course_recs is None:
+        if st.button("Find relevant courses →", key=f"get_course_recs_{hash(topic_key) % 9999}", type="secondary"):
+            s.course_recs_loading = True
+            st.rerun()
+
+    elif not s.course_recs:
+        st.markdown('<div style="font-size:0.82rem;color:var(--mut)">No courses found for this topic yet — more courses are being added.</div>', unsafe_allow_html=True)
+
+    else:
+        for i, c in enumerate(s.course_recs):
+            st.markdown(f"""
+            <div style="border:1px solid var(--bdr);padding:0.65rem 0.9rem;margin-bottom:0.5rem">
+              <div style="font-size:0.87rem;font-weight:600;color:var(--txt)">{c['title']}</div>
+              <div style="font-size:0.73rem;color:var(--mut);margin-top:1px">{c['professor']}</div>
+              {"<div style='font-size:0.8rem;color:var(--sub);margin-top:5px;line-height:1.5'>"+c['explanation']+"</div>" if c.get('explanation') else ""}
+            </div>
+            """, unsafe_allow_html=True)
+        if st.button("Refresh", key=f"refresh_course_recs_{hash(topic_key) % 9999}"):
+            s.course_recs = None; st.rerun()
+
+
 def page_topics():
     all_pool = ALL_TOPICS + (s.topic_ai_generated or [])
     n_prof = sum(1 for t in ALL_TOPICS if t["source"] == "professor")
@@ -1824,6 +1888,16 @@ def page_topics():
                     </a>""", unsafe_allow_html=True)
                 else:
                     st.button("Further Details", key="further_details_btn", disabled=not (method or reqs))
+
+            # Course recommendations for this topic
+            kws_list = selected.get("fields", [])
+            if isinstance(kws_list, str):
+                kws_list = [k.strip() for k in kws_list.split(",") if k.strip()]
+            _course_recs_panel(
+                thesis_title=selected.get("title", ""),
+                thesis_description=selected.get("description", ""),
+                keywords=kws_list,
+            )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
