@@ -733,6 +733,8 @@ st.markdown("""
   background:#FFF0F0; border:1.5px solid #F87171;
   padding:0.75rem 1.1rem; margin-bottom:1rem;
   animation: ai-pulse 1.4s ease-in-out infinite;
+  position:relative; z-index:100;
+  box-sizing:border-box; width:100%; overflow:visible;
 }
 .ai-running-banner .ai-bug {
   font-size:1.6rem; line-height:1;
@@ -3219,6 +3221,15 @@ section[data-testid="stSidebar"] [data-testid="stSidebarNavSeparator"] {
     letter-spacing: 0.08em !important;
 }
 section[data-testid="stSidebar"] hr { border-color: rgba(255,255,255,0.25) !important; }
+section[data-testid="stSidebar"] .st-key-sidebar_logout_btn button {
+    color: #111827 !important;
+    background: white !important;
+    border: none !important;
+    font-weight: 500 !important;
+}
+section[data-testid="stSidebar"] .st-key-sidebar_logout_btn button:hover {
+    background: #f3f4f6 !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
