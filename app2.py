@@ -770,6 +770,41 @@ st.markdown("""
 .element-container:has(.list-item) + .element-container .stButton > button { display:none !important; }
 .element-container:has(.topic-card) + .element-container + .element-container > div > div > button,
 .element-container:has(.topic-card) + .element-container + .element-container .stButton > button { display:none !important; }
+.dash-card {
+  background: var(--wh); border: 1px solid var(--bdr);
+  border-radius: 0 !important;
+  padding: 1.4rem 1.5rem;
+  height: 190px; min-height: 190px;
+  display: flex; flex-direction: column;
+  cursor: pointer;
+  transition: box-shadow 0.15s, border-color 0.15s, transform 0.15s;
+  position: relative; box-sizing: border-box;
+}
+.dash-card:hover {
+  box-shadow: 0 8px 28px rgba(0,0,0,0.14) !important;
+  border-color: #A8A8A8 !important;
+  transform: translateY(-4px); z-index: 1;
+}
+.dash-card-title { font-size: 0.93rem; font-weight: 600; color: var(--txt); margin: 0.55rem 0 0.35rem; }
+.dash-card-body  { font-size: 0.78rem; color: var(--mut); line-height: 1.55; flex: 1; }
+.dash-arrow { font-size: 0.78rem; color: var(--g); font-weight: 500; margin-top: auto; padding-top: 0.4rem;
+              display: flex; align-items: center; justify-content: space-between; }
+.element-container:has(.dash-card) + .element-container {
+  height: 0 !important; min-height: 0 !important;
+  overflow: visible !important; margin: 0 !important; padding: 0 !important;
+}
+.element-container:has(.dash-card) + .element-container button,
+.element-container:has(.dash-card) + .element-container .stButton > button {
+  position: relative !important;
+  margin-top: -194px !important;
+  height: 194px !important;
+  width: 100% !important;
+  opacity: 0 !important;
+  cursor: pointer !important;
+  background: transparent !important;
+  border: none !important;
+  z-index: 5 !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -2647,18 +2682,15 @@ def page_prof_home():
     """, unsafe_allow_html=True)
 
     docs_count = len(s.prof_uploaded_docs)
-    faq_count  = len(s.prof_faq_bank)
+    # Ensure notifications key always exists (defensive: cache may predate this key)
+    _DEMO_SHARED.setdefault("notifications", [])
+    notifs = _DEMO_SHARED["notifications"] or []
+    unread = [n for n in notifs if isinstance(n, dict) and not n.get("read")]
 
-    ico_upload = '<svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="#009640" stroke-width="1.6"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" stroke-linecap="square"/><polyline points="17 8 12 3 7 8" stroke-linecap="square" stroke-linejoin="miter"/><line x1="12" y1="3" x2="12" y2="15" stroke-linecap="square"/></svg>'
+    ico_upload   = '<svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="#009640" stroke-width="1.6"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" stroke-linecap="square"/><polyline points="17 8 12 3 7 8" stroke-linecap="square" stroke-linejoin="miter"/><line x1="12" y1="3" x2="12" y2="15" stroke-linecap="square"/></svg>'
     ico_students = '<svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="#009640" stroke-width="1.6"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" stroke-linecap="square"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" stroke-linecap="square"/></svg>'
-    ico_faq = '<svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="#009640" stroke-width="1.6"><circle cx="12" cy="12" r="10"/><path d="M9 9a3 3 0 1 1 4 2.83V13M12 17h.01" stroke-linecap="square"/></svg>'
-    ico_msg2 = '<svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="#009640" stroke-width="1.6"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" stroke-linejoin="miter"/></svg>'
-
-    notifs = _DEMO_SHARED.get("notifications", [])
-    unread = [n for n in notifs if not n.get("read")]
-
-    ico_profile = '<svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="#009640" stroke-width="1.6"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" stroke-linecap="square"/></svg>'
-    ico_shield  = '<svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="#009640" stroke-width="1.6"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" stroke-linejoin="miter"/></svg>'
+    ico_profile  = '<svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="#009640" stroke-width="1.6"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" stroke-linecap="square"/></svg>'
+    ico_shield   = '<svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="#009640" stroke-width="1.6"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" stroke-linejoin="miter"/></svg>'
 
     c1, c2, c3, c4 = st.columns(4, gap="small")
 
@@ -2929,6 +2961,118 @@ def page_prof_profile():
             st.markdown(f'<div class="sec-head" style="margin-top:1rem">Active restrictions ({len(lines)})</div>', unsafe_allow_html=True)
             for line in lines:
                 st.markdown(f'<div style="font-size:0.82rem;color:var(--sub);padding:0.3rem 0;border-bottom:1px solid var(--bdr)">🚫 {line}</div>', unsafe_allow_html=True)
+
+
+def page_prof_faq():
+    """Admin information lookup tool for professors — HSG regulations, deadlines, procedures."""
+    topbar("Admin FAQ", "HSG thesis administration & regulations")
+
+    _ADMIN_CONTEXT = """
+You are an expert on HSG (University of St. Gallen) thesis administration, academic regulations,
+and faculty procedures. You help professors quickly find answers about:
+- Thesis supervision regulations and deadlines
+- Grade submission procedures and timelines
+- HSG academic policies (plagiarism, extensions, appeals)
+- Faculty administrative processes (registration, topic approval, final submission)
+- HSG IT systems and portals (Compass, myUniSG, Alexandria)
+- Contact points and escalation paths for administrative issues
+- International student thesis requirements
+- Language rules and co-supervision procedures
+
+Be concise, factual, and direct. If the exact regulation is unclear, say so and suggest the
+appropriate HSG contact (e.g., Student Services, School secretariat).
+"""
+
+    SUGGESTIONS = [
+        "What are the thesis submission deadlines this semester?",
+        "How do I approve a topic change after registration?",
+        "What is the process for requesting a thesis extension?",
+        "Where do I submit final grades for supervised theses?",
+        "What are the language requirements for Master theses?",
+        "How does co-supervision with external supervisors work?",
+    ]
+
+    chat_key = "prof_faq_history"
+    if chat_key not in st.session_state:
+        st.session_state[chat_key] = []
+    history = st.session_state[chat_key]
+
+    st.markdown("""
+    <div style="font-size:0.83rem;color:var(--mut);margin-bottom:1rem">
+    Ask any question about HSG thesis regulations, administrative procedures, deadlines, or faculty processes.
+    </div>""", unsafe_allow_html=True)
+
+    if not history:
+        st.markdown('<div style="font-size:0.75rem;color:var(--mut);margin-bottom:6px">Common questions:</div>', unsafe_allow_html=True)
+        s_cols = st.columns(3)
+        for j, sq in enumerate(SUGGESTIONS):
+            with s_cols[j % 3]:
+                if st.button(sq, key=f"pfaq_sugg_{j}"):
+                    history.append({"role": "user", "content": sq})
+                    with ai_spinner("Looking up…"):
+                        from src.agents.llm_client import chat as nim_chat
+                        reply = nim_chat(
+                            messages=[{"role": "user", "content": sq}],
+                            system=_ADMIN_CONTEXT,
+                            max_tokens=600,
+                            temperature=0.3,
+                        )
+                    history.append({"role": "assistant", "content": reply})
+                    st.session_state[chat_key] = history
+                    st.rerun()
+        st.markdown('<div style="border-top:1px solid var(--bdr);margin:0.8rem 0 1rem"></div>', unsafe_allow_html=True)
+
+    for msg in history:
+        if msg["role"] == "user":
+            st.markdown(f"""
+            <div style="display:flex;justify-content:flex-end;margin-bottom:10px">
+              <div style="background:var(--gl);border:1px solid var(--gm);padding:0.55rem 0.85rem;
+                          max-width:78%;font-size:0.85rem;color:var(--txt);line-height:1.5">
+                {msg["content"]}
+              </div>
+            </div>""", unsafe_allow_html=True)
+        else:
+            st.markdown(f"""
+            <div style="display:flex;gap:10px;margin-bottom:10px;align-items:flex-start">
+              <div style="width:28px;height:28px;background:#0D3320;flex-shrink:0;
+                          display:flex;align-items:center;justify-content:center;
+                          font-size:0.6rem;font-weight:700;color:white">FAQ</div>
+              <div style="background:var(--bg);border:1px solid var(--bdr);padding:0.55rem 0.85rem;
+                          max-width:84%;font-size:0.85rem;color:var(--txt);line-height:1.6">
+                {msg["content"]}
+              </div>
+            </div>""", unsafe_allow_html=True)
+
+    user_q = st.text_area(
+        "Ask about HSG admin procedures…",
+        height=75,
+        placeholder="e.g. What is the deadline to submit my supervision agreement this semester?",
+        key="prof_faq_input",
+        label_visibility="collapsed",
+    )
+    ca, cb = st.columns([5, 1])
+    with ca:
+        if st.button("Ask →", type="primary", key="prof_faq_ask"):
+            if user_q.strip():
+                history.append({"role": "user", "content": user_q.strip()})
+                with ai_spinner("Looking up…"):
+                    try:
+                        from src.agents.llm_client import chat as nim_chat
+                        reply = nim_chat(
+                            messages=[{"role": m["role"], "content": m["content"]} for m in history],
+                            system=_ADMIN_CONTEXT,
+                            max_tokens=600,
+                            temperature=0.3,
+                        )
+                    except Exception as e:
+                        reply = f"[Error: {e}]"
+                history.append({"role": "assistant", "content": reply})
+                st.session_state[chat_key] = history
+                st.rerun()
+    with cb:
+        if st.button("Clear", key="prof_faq_clear"):
+            st.session_state[chat_key] = []
+            st.rerun()
 
 
 def page_upload_documents():
@@ -3566,9 +3710,9 @@ with st.sidebar:
         _sb_section("Professor Portal")
         _sb_nav("Dashboard",            "Home",             "home")
         _sb_nav("My Profile",           "Prof Profile",     "profprofile")
-        _sb_nav("Knowledge Base",       "Upload Documents", "docs")
+        _sb_section("Students")
         _sb_nav("Student Applications", "Messages",         "msgs")
-        _sb_nav("Thesis General FAQ",   "AI Assistant",     "ai")
+        _sb_nav("Admin FAQ",            "Prof FAQ",         "profaq")
     else:
         _sb_section("Student Portal")
         _sb_nav("Dashboard",        "Home",           "home")
@@ -3606,6 +3750,7 @@ elif _pinned == "Professors":         page_professors()
 elif _pinned == "Thesis Topics":      page_topics()
 elif _pinned == "My Profile":         page_profile()
 elif _pinned == "Prof Profile":       page_prof_profile()
+elif _pinned == "Prof FAQ":           page_prof_faq()
 elif _pinned == "Upload Documents":   page_upload_documents()
 elif _pinned == "AI Assistant":       page_ai_assistant()
 elif _pinned == "Feedback":           page_feedback()
