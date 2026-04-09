@@ -3411,16 +3411,26 @@ def page_feedback():
             st.session_state["_nav_target"] = "Messages"; st.rerun()
 
 # ─────────────────────────────────────────────────────────────────────────────
-# PAGE: THESIS PROJECT  (Trello-style timeline)
+# PAGE: THESIS PROJECT  (Accordion-style timeline)
 # ─────────────────────────────────────────────────────────────────────────────
 
 import datetime as _datetime
 
+_HSG_SEMESTERS = [
+    {"label": "Winter 2025", "submission": _datetime.date(2025, 11, 17), "assessment": _datetime.date(2026, 2, 5),  "grade": _datetime.date(2026, 2, 12)},
+    {"label": "Spring 2026", "submission": _datetime.date(2026, 2, 16), "assessment": _datetime.date(2026, 5, 7),  "grade": _datetime.date(2026, 5, 14)},
+    {"label": "Summer 2026", "submission": _datetime.date(2026, 5, 19), "assessment": _datetime.date(2026, 7, 30), "grade": _datetime.date(2026, 8, 6)},
+    {"label": "Autumn 2026", "submission": _datetime.date(2026, 8, 18), "assessment": _datetime.date(2026, 11, 5), "grade": _datetime.date(2026, 11, 12)},
+    {"label": "Winter 2026", "submission": _datetime.date(2026, 11, 17), "assessment": _datetime.date(2027, 2, 4), "grade": _datetime.date(2027, 2, 11)},
+]
+
+def _available_semesters() -> list:
+    today = _datetime.date.today()
+    return [s for s in _HSG_SEMESTERS if s["submission"] >= today]
+
 def _build_thesis_tasks(submission_date: _datetime.date) -> list:
-    """Generate timeline tasks backward from submission date."""
     sd = submission_date
     tasks = [
-        # Phase 1 – Preparation
         {"id": "T01", "phase": "1 · Preparation", "title": "Choose supervisor",
          "desc": "Identify and contact a supervisor from active teaching staff.",
          "due": sd - _datetime.timedelta(weeks=20), "col": 0},
@@ -3430,7 +3440,6 @@ def _build_thesis_tasks(submission_date: _datetime.date) -> list:
         {"id": "T03", "phase": "1 · Preparation", "title": "Coordinate details",
          "desc": "Agree on title, language, and expected defence date.",
          "due": sd - _datetime.timedelta(weeks=16), "col": 0},
-        # Phase 2 – Registration
         {"id": "T04", "phase": "2 · Registration", "title": "Submit registration on TMP",
          "desc": "Submit thesis registration via the Thesis Management Platform dashboard.",
          "due": sd - _datetime.timedelta(weeks=14), "col": 1},
@@ -3440,7 +3449,6 @@ def _build_thesis_tasks(submission_date: _datetime.date) -> list:
         {"id": "T06", "phase": "2 · Registration", "title": "Programme approval",
          "desc": "Programme office confirms registration — binding deadline is set.",
          "due": sd - _datetime.timedelta(weeks=12), "col": 1},
-        # Phase 3 – Writing
         {"id": "T07", "phase": "3 · Writing", "title": "Start writing",
          "desc": "Begin thesis aligned with agreed format and citation style.",
          "due": sd - _datetime.timedelta(weeks=11), "col": 2},
@@ -3453,29 +3461,22 @@ def _build_thesis_tasks(submission_date: _datetime.date) -> list:
         {"id": "T10", "phase": "3 · Writing", "title": "Declaration of authorship",
          "desc": "Confirm and sign declaration of authorship before submission.",
          "due": sd - _datetime.timedelta(days=3), "col": 2},
-        # Phase 4 – Submission
         {"id": "T11", "phase": "4 · Submission", "title": "Submit electronically",
          "desc": "Upload via TMP — max 40 MB, with metadata. Late = grade 1.00.",
          "due": sd, "col": 3},
-        # Phase 5 – Assessment
         {"id": "T12", "phase": "5 · Assessment", "title": "Grading & report",
          "desc": "Supervisor grades and uploads assessment report to TMP.",
          "due": sd + _datetime.timedelta(weeks=4), "col": 4},
         {"id": "T13", "phase": "5 · Assessment", "title": "Grade published",
          "desc": "Grade published on one of 4 defined dates per year.",
          "due": sd + _datetime.timedelta(weeks=8), "col": 4},
-        # Phase 6 – Publication
         {"id": "T14", "phase": "6 · Publication", "title": "Published in EDOK",
          "desc": "Bachelor ≥5.5 and all Master theses published in HSG library database.",
          "due": sd + _datetime.timedelta(weeks=12), "col": 5},
     ]
-    # Add status based on today
     today = _datetime.date.today()
     for t in tasks:
-        if today > t["due"]:
-            t["default_done"] = True
-        else:
-            t["default_done"] = False
+        t["default_done"] = today > t["due"]
     return tasks
 
 
@@ -3483,48 +3484,62 @@ def page_thesis_project(embedded=False):
     if not embedded:
         topbar("Thesis Timeline", "Track your milestones from preparation to publication")
 
-    # ── Setup: pick submission date ──────────────────────────────────────────
+    # ── Setup: pick semester ─────────────────────────────────────────────────
     if not s.thesis_submission_date:
         st.markdown("""
-        <div style="max-width:480px;margin:2rem auto;text-align:center">
+        <div style="max-width:520px;margin:2rem auto;text-align:center">
           <div style="font-size:1.15rem;font-weight:700;color:var(--txt);margin-bottom:6px">When do you plan to submit?</div>
-          <div style="font-size:0.84rem;color:var(--mut);margin-bottom:1.4rem">
-            Enter your target submission date. We'll build your full thesis timeline automatically
-            based on the official HSG thesis process (preparation → registration → writing → submission → assessment → publication).
+          <div style="font-size:0.84rem;color:var(--mut);margin-bottom:1.6rem">
+            Select your target semester. We'll build your full thesis timeline automatically
+            based on the official HSG thesis process.
           </div>
         </div>
         """, unsafe_allow_html=True)
+
+        today          = _datetime.date.today()
+        available_set  = {sem["label"] for sem in _available_semesters()}
+
         col_c, col_d, col_e = st.columns([1, 2, 1])
         with col_d:
-            sub_date = st.date_input(
-                "Target submission date",
-                value=_datetime.date.today() + _datetime.timedelta(weeks=20),
-                min_value=_datetime.date.today(),
-                key="thesis_sub_date_input",
-            )
-            if st.button("Build my timeline →", type="primary", key="build_timeline_btn", use_container_width=True):
-                s.thesis_submission_date = sub_date
-                s.thesis_tasks = _build_thesis_tasks(sub_date)
-                # Init done states
-                for t in s.thesis_tasks:
-                    key = f"task_done_{t['id']}"
-                    if key not in st.session_state:
-                        st.session_state[key] = t["default_done"]
-                st.rerun()
+            for sem in _HSG_SEMESTERS:                          # ← all five seasons shown
+                days_to   = (sem["submission"] - today).days
+                is_past   = sem["label"] not in available_set
+
+                if is_past:
+                    # Greyed-out, non-interactive card for past semesters
+                    st.markdown(
+                        f"<div style='padding:0.5rem 0.75rem;margin-bottom:0.35rem;"
+                        f"border:1px solid var(--bdr);color:var(--mut);"
+                        f"font-size:0.82rem;opacity:0.45;user-select:none'>"
+                        f"<b>{sem['label']}</b> — {sem['submission'].strftime('%d %b %Y')}"
+                        f"&nbsp;·&nbsp;deadline passed"
+                        f"</div>",
+                        unsafe_allow_html=True,
+                    )
+                else:
+                    btn_label = f"**{sem['label']}** — {sem['submission'].strftime('%d %b %Y')}  ·  {days_to} days away"
+                    if st.button(btn_label, key=f"sem_btn_{sem['label']}", use_container_width=True):
+                        s.thesis_submission_date = sem["submission"]
+                        s.thesis_tasks = _build_thesis_tasks(sem["submission"])
+                        for t in s.thesis_tasks:
+                            key = f"task_done_{t['id']}"
+                            if key not in st.session_state:
+                                st.session_state[key] = t["default_done"]
+                        st.rerun()
         return
 
     tasks = s.thesis_tasks or _build_thesis_tasks(s.thesis_submission_date)
     if s.thesis_tasks is None:
         s.thesis_tasks = tasks
 
-    today = _datetime.date.today()
+    today    = _datetime.date.today()
     sub_date = s.thesis_submission_date
     days_left = (sub_date - today).days
 
-    # ── Header bar ──────────────────────────────────────────────────────────
+    # ── Header bar ───────────────────────────────────────────────────────────
     done_count = sum(1 for t in tasks if st.session_state.get(f"task_done_{t['id']}", t["default_done"]))
     total = len(tasks)
-    pct = int(done_count / total * 100)
+    pct   = int(done_count / total * 100)
 
     col_hdr1, col_hdr2 = st.columns([4, 1])
     with col_hdr1:
@@ -3552,7 +3567,6 @@ def page_thesis_project(embedded=False):
         if st.button("Reset timeline", key="reset_timeline_btn"):
             s.thesis_submission_date = None
             s.thesis_tasks = None
-            # Clear task states
             for t in tasks:
                 key = f"task_done_{t['id']}"
                 if key in st.session_state:
@@ -3561,75 +3575,114 @@ def page_thesis_project(embedded=False):
 
     st.markdown("<div style='height:0.3rem'></div>", unsafe_allow_html=True)
 
-    # ── Trello board ─────────────────────────────────────────────────────────
+    # ── Accordion phases ──────────────────────────────────────────────────────
     PHASES = [
-        ("1 · Preparation", 0, "#EDE9FE", "#5B21B6"),
+        ("1 · Preparation",  0, "#EDE9FE", "#5B21B6"),
         ("2 · Registration", 1, "#DBEAFE", "#1D4ED8"),
-        ("3 · Writing", 2, "#FEF3C7", "#92400E"),
-        ("4 · Submission", 3, "#FEE2E2", "#991B1B"),
-        ("5 · Assessment", 4, "#D1FAE5", "#065F46"),
-        ("6 · Publication", 5, "#F3F4F6", "#374151"),
+        ("3 · Writing",      2, "#FEF3C7", "#92400E"),
+        ("4 · Submission",   3, "#FEE2E2", "#991B1B"),
+        ("5 · Assessment",   4, "#D1FAE5", "#065F46"),
+        ("6 · Publication",  5, "#F3F4F6", "#374151"),
     ]
 
-    cols = st.columns(len(PHASES), gap="small")
+    for idx, (phase_name, col_idx, bg, fg) in enumerate(PHASES):
+        phase_tasks  = [t for t in tasks if t["col"] == col_idx]
+        phase_done   = sum(1 for t in phase_tasks if st.session_state.get(f"task_done_{t['id']}", t["default_done"]))
+        phase_total  = len(phase_tasks)
+        earliest_due = min(t["due"] for t in phase_tasks)
+        latest_due   = max(t["due"] for t in phase_tasks)
+        any_overdue  = any(
+            (not st.session_state.get(f"task_done_{t['id']}", t["default_done"])) and today > t["due"]
+            for t in phase_tasks
+        )
 
-    for (phase_name, col_idx, bg, fg), col in zip(PHASES, cols):
-        phase_tasks = [t for t in tasks if t["col"] == col_idx]
-        with col:
-            st.markdown(f"""
-            <div style="background:{bg};padding:0.5rem 0.7rem;margin-bottom:0.6rem">
-              <div style="font-size:0.72rem;font-weight:700;color:{fg};text-transform:uppercase;letter-spacing:0.05em">{phase_name}</div>
-              <div style="font-size:0.65rem;color:{fg};opacity:0.7;margin-top:1px">{len(phase_tasks)} tasks</div>
-            </div>
-            """, unsafe_allow_html=True)
+        status_icon    = "✓" if phase_done == phase_total else ("⚠" if any_overdue else "○")
 
+        # ── Track open/closed state manually ──
+        expand_key = f"phase_expand_{col_idx}"
+        if expand_key not in st.session_state:
+            st.session_state[expand_key] = False
+
+        # ── Colored header bar (clickable to toggle) ──
+        header_html = f"""
+        <div id="phase-header-{col_idx}" style="
+            background-color:{bg};
+            border-left:5px solid {fg};
+            padding:0.65rem 0.85rem;
+            margin-top:0.5rem;
+            border-radius:6px;
+            cursor:pointer;
+            display:flex;
+            justify-content:space-between;
+            align-items:center;
+        ">
+          <span style="color:{fg};font-weight:700;font-size:0.85rem;">
+            {status_icon}&ensp;{phase_name}&ensp;·&ensp;{phase_done}/{phase_total} done&ensp;·&ensp;{earliest_due.strftime('%d %b')} – {latest_due.strftime('%d %b %Y')}
+          </span>
+          <span style="color:{fg};font-size:1rem;">{'▾' if st.session_state[expand_key] else '▸'}</span>
+        </div>
+        """
+        st.markdown(header_html, unsafe_allow_html=True)
+
+        # Toggle button (small, right after header)
+        if st.button(
+            "Close ▲" if st.session_state[expand_key] else "Open ▼",
+            key=f"toggle_phase_{col_idx}",
+            use_container_width=True,
+        ):
+            st.session_state[expand_key] = not st.session_state[expand_key]
+            st.rerun()
+
+        # ── Show tasks only if phase is expanded ──
+        if st.session_state[expand_key]:
             for t in phase_tasks:
                 task_key = f"task_done_{t['id']}"
                 if task_key not in st.session_state:
                     st.session_state[task_key] = t["default_done"]
                 is_done = st.session_state[task_key]
 
-                due = t["due"]
-                is_overdue = (not is_done) and (today > due)
+                due         = t["due"]
+                is_overdue  = (not is_done) and (today > due)
                 is_upcoming = (not is_done) and (0 <= (due - today).days <= 14)
 
                 if is_done:
-                    card_border = f"border-left:3px solid var(--g)"
-                    card_bg = "background:#F0FDF4"
-                    due_color = "var(--g)"
+                    card_border = "border-left:3px solid var(--g)"
+                    card_bg     = "background:#F0FDF4"
+                    due_color   = "var(--g)"
                 elif is_overdue:
                     card_border = "border-left:3px solid #EF4444"
-                    card_bg = "background:#FEF2F2"
-                    due_color = "#EF4444"
+                    card_bg     = "background:#FEF2F2"
+                    due_color   = "#EF4444"
                 elif is_upcoming:
                     card_border = "border-left:3px solid #F59E0B"
-                    card_bg = "background:#FFFBEB"
-                    due_color = "#92400E"
+                    card_bg     = "background:#FFFBEB"
+                    due_color   = "#92400E"
                 else:
                     card_border = "border-left:3px solid var(--bdr)"
-                    card_bg = "background:var(--wh)"
-                    due_color = "var(--mut)"
+                    card_bg     = "background:var(--wh)"
+                    due_color   = "var(--mut)"
 
                 title_style = "text-decoration:line-through;color:var(--mut)" if is_done else "color:var(--txt)"
 
-                st.markdown(f"""
-                <div style="{card_bg};{card_border};padding:0.65rem 0.75rem;
-                            margin-bottom:0.5rem;border-top:1px solid var(--bdr);
-                            border-right:1px solid var(--bdr);border-bottom:1px solid var(--bdr)">
-                  <div style="font-size:0.8rem;font-weight:600;{title_style};margin-bottom:3px;line-height:1.3">{t['title']}</div>
-                  <div style="font-size:0.71rem;color:var(--mut);line-height:1.45;margin-bottom:6px">{t['desc']}</div>
-                  <div style="font-size:0.68rem;font-weight:600;color:{due_color}">
-                    {'✓ Done · ' if is_done else ('⚠ Overdue · ' if is_overdue else ('◉ Due soon · ' if is_upcoming else '○ '))}
-                    {due.strftime("%d %b %Y")}
-                  </div>
-                </div>
-                """, unsafe_allow_html=True)
-
-                btn_label = "✓ Mark done" if not is_done else "↩ Undo"
-                if st.button(btn_label, key=f"toggle_{t['id']}"):
-                    st.session_state[task_key] = not is_done
-                    st.rerun()
-
+                col_card, col_btn = st.columns([5, 1])
+                with col_card:
+                    st.markdown(f"""
+                    <div style="{card_bg};{card_border};padding:0.65rem 0.75rem;
+                                margin-bottom:0.35rem;border-top:1px solid var(--bdr);
+                                border-right:1px solid var(--bdr);border-bottom:1px solid var(--bdr)">
+                      <div style="font-size:0.8rem;font-weight:600;{title_style};margin-bottom:3px;line-height:1.3">{t['title']}</div>
+                      <div style="font-size:0.71rem;color:var(--mut);line-height:1.45;margin-bottom:6px">{t['desc']}</div>
+                      <div style="font-size:0.68rem;font-weight:600;color:{due_color}">
+                        {'✓ Done · ' if is_done else ('⚠ Overdue · ' if is_overdue else ('◉ Due soon · ' if is_upcoming else '○ '))}
+                        {due.strftime("%d %b %Y")}
+                      </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                with col_btn:
+                    btn_label = "✓ Done" if not is_done else "↩ Undo"
+                    if st.button(btn_label, key=f"toggle_{t['id']}"):
+                        st.session_state[task_key] = not is_done
+                        st.rerun()
 
 # ─────────────────────────────────────────────────────────────────────────────
 # NAVIGATION
