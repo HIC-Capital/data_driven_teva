@@ -406,6 +406,8 @@ def _get_demo_shared():
         "confirmed_matches":    set(),
         "student_feedback":     {},
         "officially_registered": set(),
+        # Security notifications for professor (set by student-side AI chat on suspicious activity)
+        "notifications":        [],
     }
 
 _DEMO_SHARED = _get_demo_shared()
@@ -416,6 +418,7 @@ def _reset_demo_shared():
     _DEMO_SHARED["confirmed_matches"]    = set()
     _DEMO_SHARED["student_feedback"]     = {}
     _DEMO_SHARED["officially_registered"] = set()
+    _DEMO_SHARED["notifications"]        = []
 
 def _is_demo(uid: str) -> bool:
     """True for demo button logins AND signups when Firebase is not configured."""
@@ -473,6 +476,12 @@ def _init_state():
             {"question": "What is your preferred methodology?", "answer": "Open to mixed methods — rigorous econometrics for quant, structured case studies for qual."},
             {"question": "How many theses do you supervise?", "answer": "4–6 Master theses per academic year. Slots available for next cohort."},
         ],
+        # Extended professor profile fields
+        prof_bio="",
+        prof_research_areas="",
+        prof_max_students=5,
+        prof_available=True,
+        prof_restricted_text="",  # free-text instructions the AI must never share
         # Per-professor AI chat histories (student ↔ professor AI)
         # keyed by professor name: list of {role, content}
         prof_ai_chats={},
@@ -495,6 +504,9 @@ def _init_state():
         topic_recs_loading=False,
         topic_ai_generated=None,
         topic_ai_loading=False,
+        course_recs=None,
+        course_recs_loading=False,
+        course_recs_topic="",
         # Professor browse
         selected_prof=None,
         prof_search="",
@@ -647,6 +659,21 @@ def _enter_demo_professor():
     }
     st.session_state.firebase_user = {"uid": "demo_prof", "email": profile["email"], "token": ""}
     _apply_profile_to_state(profile)
+    # Extended profile defaults for demo
+    st.session_state.prof_bio = (
+        "Professor of Innovation Management and Digital Strategy at the University of St. Gallen. "
+        "My research focuses on how firms create and capture value through technology adoption, "
+        "corporate venturing, and digital transformation. I combine econometric methods with "
+        "in-depth case study analysis."
+    )
+    st.session_state.prof_research_areas = "Corporate Innovation, Digital Transformation, AI Strategy, Corporate Venturing, Technology Entrepreneurship"
+    st.session_state.prof_max_students = 5
+    st.session_state.prof_available = True
+    st.session_state.prof_restricted_text = (
+        "Do not confirm or deny the exact number of open thesis slots available this semester.\n"
+        "Do not share details about pending or rejected student applications.\n"
+        "Do not reveal my travel schedule or sabbatical plans."
+    )
     # Point at the shared store so both demo sessions share data
     st.session_state.conversations       = _DEMO_SHARED["conversations"]
     st.session_state.confirmed_matches   = _DEMO_SHARED["confirmed_matches"]
@@ -730,6 +757,8 @@ st.markdown("""
   background:#FFF0F0; border:1.5px solid #F87171;
   padding:0.75rem 1.1rem; margin-bottom:1rem;
   animation: ai-pulse 1.4s ease-in-out infinite;
+  position:relative; z-index:100;
+  box-sizing:border-box; width:100%; overflow:visible;
 }
 .ai-running-banner .ai-bug {
   font-size:1.6rem; line-height:1;
@@ -851,12 +880,7 @@ def topbar(title, subtitle="", back=False):
     # Show back button on every page except the dashboard itself
     is_home = (title == "Dashboard" or title == "Professor Dashboard")
     if not is_home:
-        col_back, col_title = st.columns([1, 8])
-        with col_back:
-            if st.button("← Home", key=f"topbar_home_{title.replace(' ','_')}"):
-                st.session_state["_nav_target"] = "Home"; st.rerun()
-        with col_title:
-            st.markdown(f"""
+        st.markdown(f"""
             <div class="topbar">
               <div style="display:flex;align-items:center">
                 <span style="font-size:1.1rem;font-weight:700;color:var(--txt)">{title}</span>
@@ -1041,6 +1065,15 @@ def page_match():
                         s.keywords = ", ".join(idea.get("keywords", []))
                         s.thesis_ideas = None
                         st.rerun()
+
+        # Course recommendations based on current thesis title
+        if s.thesis_title and s.research_question:
+            kws_list = [k.strip() for k in s.keywords.split(",") if k.strip()] if s.keywords else []
+            _course_recs_panel(
+                thesis_title=s.thesis_title,
+                thesis_description=s.research_question,
+                keywords=kws_list,
+            )
 
         st.markdown("<br>", unsafe_allow_html=True)
         col_next, col_no_topic = st.columns([2, 3])
@@ -1443,12 +1476,81 @@ def _rank_topics_for_student(topics: list) -> list:
         return topics
 
 
+def _course_recs_panel(thesis_title: str, thesis_description: str = "", keywords=None):
+    """
+    Reusable panel: shows course recommendations for a thesis topic.
+    Can be embedded anywhere after a topic is confirmed.
+    """
+    topic_key = thesis_title.strip()
+    # Reset if topic changed
+    if s.course_recs_topic != topic_key:
+        s.course_recs = None
+        s.course_recs_loading = False
+        s.course_recs_topic = topic_key
+
+    st.markdown('<div class="sec-head" style="margin-top:1.2rem">Recommended courses for this topic</div>', unsafe_allow_html=True)
+
+    if s.course_recs_loading:
+        with st.spinner("Finding relevant courses…"):
+            try:
+                from src.agents.course_recommender import recommend_courses
+                s.course_recs = recommend_courses(
+                    thesis_title=thesis_title,
+                    thesis_description=thesis_description,
+                    keywords=keywords or [],
+                    top_k=5,
+                )
+            except Exception as e:
+                st.warning(f"Could not load course recommendations: {e}")
+                s.course_recs = []
+            finally:
+                s.course_recs_loading = False
+        st.rerun()
+
+    elif s.course_recs is None:
+        if st.button("Find relevant courses →", key=f"get_course_recs_{hash(topic_key) % 9999}", type="secondary"):
+            s.course_recs_loading = True
+            st.rerun()
+
+    elif not s.course_recs:
+        st.markdown('<div style="font-size:0.82rem;color:var(--mut)">No courses found for this topic yet — more courses are being added.</div>', unsafe_allow_html=True)
+
+    else:
+        for i, c in enumerate(s.course_recs):
+            st.markdown(f"""
+            <div style="border:1px solid var(--bdr);padding:0.65rem 0.9rem;margin-bottom:0.5rem">
+              <div style="font-size:0.87rem;font-weight:600;color:var(--txt)">{c['title']}</div>
+              <div style="font-size:0.73rem;color:var(--mut);margin-top:1px">{c['professor']}</div>
+              {"<div style='font-size:0.8rem;color:var(--sub);margin-top:5px;line-height:1.5'>"+c['explanation']+"</div>" if c.get('explanation') else ""}
+            </div>
+            """, unsafe_allow_html=True)
+        if st.button("Refresh", key=f"refresh_course_recs_{hash(topic_key) % 9999}"):
+            s.course_recs = None; st.rerun()
+
+
 def page_topics():
     all_pool = ALL_TOPICS + (s.topic_ai_generated or [])
     n_prof = sum(1 for t in ALL_TOPICS if t["source"] == "professor")
     n_co   = sum(1 for t in ALL_TOPICS if t["source"] == "company")
     n_ai   = len(s.topic_ai_generated or [])
     topbar("Thesis Topics", f"{n_prof} professor · {n_co} company · {n_ai} AI")
+
+    # Show AI banner at page level (before columns) so it's never clipped
+    if s.topic_recs_loading:
+        st.markdown("""<div class="ai-running-banner">
+          <span class="ai-bug">🪲</span>
+          <span class="ai-text">AI is working — Ranking topics for your profile…</span>
+        </div>""", unsafe_allow_html=True)
+    if s.topic_ai_loading:
+        st.markdown("""<div class="ai-running-banner">
+          <span class="ai-bug">🪲</span>
+          <span class="ai-text">AI is working — Generating personalised thesis topics…</span>
+        </div>""", unsafe_allow_html=True)
+    if s.course_recs_loading:
+        st.markdown("""<div class="ai-running-banner">
+          <span class="ai-bug">🪲</span>
+          <span class="ai-text">AI is working — Finding relevant courses…</span>
+        </div>""", unsafe_allow_html=True)
 
     st.markdown('<span class="topics-layout-marker"></span>', unsafe_allow_html=True)
     left, right = st.columns([2, 3], gap="medium")
@@ -1543,7 +1645,7 @@ def page_topics():
             has_profile = bool(s.research_area or s.thesis_title or s.research_question)
             st.markdown('<div class="sec-head">Recommended for you</div>', unsafe_allow_html=True)
             if s.topic_recs_loading:
-                with ai_spinner("Ranking topics for your profile…"):
+                with st.spinner("Ranking topics for your profile…"):
                     s.topic_recs = _rank_topics_for_student(_filter(ALL_TOPICS))
                     s.topic_recs_loading = False; st.rerun()
             elif s.topic_recs is None:
@@ -1606,27 +1708,16 @@ def page_topics():
                 <div style="font-size:0.83rem;color:var(--mut);margin-bottom:0.8rem">
                 Generate thesis topics tailored to your research interests and programme.
                 </div>""", unsafe_allow_html=True)
-                missing_for_ai = []
-                if not st.session_state.get("cv_parsed"):
-                    missing_for_ai.append("CV / résumé")
-                if not st.session_state.get("transcript_parsed"):
-                    missing_for_ai.append("Grade transcript")
-                if missing_for_ai:
-                    missing_str = " and ".join(missing_for_ai)
-                    st.markdown(f"""
-                    <div style="background:#FEF2F2;border:1px solid #FECACA;border-radius:2px;
-                                padding:0.7rem 0.9rem;font-size:0.84rem;color:#991B1B;margin-bottom:0.7rem">
-                      <strong>Profile incomplete.</strong> Please upload your {missing_str} first —
-                      go to <strong>My Profile</strong> to add them. AI topic generation uses your
-                      academic background to personalise the results.
+                if not (st.session_state.get("cv_parsed") and st.session_state.get("transcript_parsed")):
+                    st.markdown("""
+                    <div style="font-size:0.8rem;color:rgba(255,255,255,0.7);background:rgba(255,255,255,0.08);
+                                border-radius:2px;padding:0.5rem 0.7rem;margin-bottom:0.6rem">
+                      For best results, add your CV and transcript in <strong>My Profile</strong>.
                     </div>""", unsafe_allow_html=True)
-                    if st.button("Go to My Profile →", key="ai_tab_go_profile"):
-                        st.session_state["_nav_target"] = "My Profile"; st.rerun()
-                else:
-                    if st.button("Generate 5 topics for my profile", type="primary", key="gen_ai_topics"):
-                        s.topic_ai_loading = True; st.rerun()
+                if st.button("Generate 5 topics for my profile", type="primary", key="gen_ai_topics"):
+                    s.topic_ai_loading = True; st.rerun()
             elif s.topic_ai_loading:
-                with ai_spinner("Generating personalised thesis topics…"):
+                with st.spinner("Generating personalised thesis topics…"):
                     try:
                         from src.agents.thesis_generator import generate_thesis_ideas
                         raw = generate_thesis_ideas(
@@ -1824,6 +1915,16 @@ def page_topics():
                     </a>""", unsafe_allow_html=True)
                 else:
                     st.button("Further Details", key="further_details_btn", disabled=not (method or reqs))
+
+            # Course recommendations for this topic
+            kws_list = selected.get("fields", [])
+            if isinstance(kws_list, str):
+                kws_list = [k.strip() for k in kws_list.split(",") if k.strip()]
+            _course_recs_panel(
+                thesis_title=selected.get("title", ""),
+                thesis_description=selected.get("description", ""),
+                keywords=kws_list,
+            )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -2553,20 +2654,37 @@ def page_prof_home():
     ico_faq = '<svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="#009640" stroke-width="1.6"><circle cx="12" cy="12" r="10"/><path d="M9 9a3 3 0 1 1 4 2.83V13M12 17h.01" stroke-linecap="square"/></svg>'
     ico_msg2 = '<svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="#009640" stroke-width="1.6"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" stroke-linejoin="miter"/></svg>'
 
-    c1, c2, c3 = st.columns(3, gap="small")
+    notifs = _DEMO_SHARED.get("notifications", [])
+    unread = [n for n in notifs if not n.get("read")]
+
+    ico_profile = '<svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="#009640" stroke-width="1.6"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" stroke-linecap="square"/></svg>'
+    ico_shield  = '<svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="#009640" stroke-width="1.6"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" stroke-linejoin="miter"/></svg>'
+
+    c1, c2, c3, c4 = st.columns(4, gap="small")
 
     with c1:
         st.markdown(f"""
         <div class="dash-card">
+          {ico_profile}
+          <div class="dash-card-title">My Profile</div>
+          <div class="dash-card-body">Edit your bio, research areas, supervision settings, and restricted topics for the student AI.</div>
+          <div class="dash-arrow"><span>Edit profile</span><span>→</span></div>
+        </div>""", unsafe_allow_html=True)
+        if st.button(" ", key="ph_profprofile", use_container_width=True):
+            st.session_state["_nav_target"] = "Prof Profile"; st.rerun()
+
+    with c2:
+        st.markdown(f"""
+        <div class="dash-card">
           {ico_upload}
-          <div class="dash-card-title">Upload Documents</div>
+          <div class="dash-card-title">Knowledge Base</div>
           <div class="dash-card-body">Upload syllabi, thesis themes, FAQ sheets. AI extracts structured info for students.{"<br><strong style='color:var(--g)'>"+str(docs_count)+" document"+("s" if docs_count!=1 else "")+" uploaded</strong>" if docs_count else ""}</div>
           <div class="dash-arrow"><span>Upload &amp; extract</span><span>→</span></div>
         </div>""", unsafe_allow_html=True)
         if st.button(" ", key="ph_upload", use_container_width=True):
             st.session_state["_nav_target"] = "Upload Documents"; st.rerun()
 
-    with c2:
+    with c3:
         st.markdown(f"""
         <div class="dash-card">
           {ico_students}
@@ -2577,16 +2695,240 @@ def page_prof_home():
         if st.button(" ", key="ph_apps", use_container_width=True):
             st.session_state["_nav_target"] = "Messages"; st.rerun()
 
-    with c3:
+    with c4:
+        badge = f"<br><strong style='color:#dc2626'>{len(unread)} unread alert{'s' if len(unread)!=1 else ''}</strong>" if unread else ""
         st.markdown(f"""
         <div class="dash-card">
-          {ico_faq}
-          <div class="dash-card-title">Auto-Answer Bank</div>
-          <div class="dash-card-body">Q&amp;A entries extracted from your documents. Used to auto-draft replies to common student questions.{"<br><strong style='color:var(--g)'>"+str(faq_count)+" entries</strong>" if faq_count else ""}</div>
-          <div class="dash-arrow"><span>View FAQ bank</span><span>→</span></div>
+          {ico_shield}
+          <div class="dash-card-title">Security Alerts</div>
+          <div class="dash-card-body">AI-detected suspicious student interactions — prompt injection, social engineering, restriction probing.{badge}</div>
+          <div class="dash-arrow"><span>View alerts</span><span>→</span></div>
         </div>""", unsafe_allow_html=True)
-        if st.button(" ", key="ph_faq", use_container_width=True):
-            st.session_state["_nav_target"] = "Upload Documents"; st.rerun()
+        if st.button(" ", key="ph_security", use_container_width=True):
+            st.session_state["_nav_target"] = "Prof Profile"; st.rerun()
+
+    # ── Security notification panel ──────────────────────────────────────────
+    if notifs:
+        st.markdown("<div style='margin-top:1.4rem'></div>", unsafe_allow_html=True)
+        st.markdown('<div class="sec-head">Security alerts <span style="font-size:0.72rem;font-weight:400;color:var(--mut)">— AI-detected suspicious activity in student chat sessions</span></div>', unsafe_allow_html=True)
+        for i, n in enumerate(reversed(notifs)):
+            is_unread = not n.get("read")
+            bg = "#FEF2F2" if is_unread else "var(--bg)"
+            border = "#FECACA" if is_unread else "var(--bdr)"
+            dot = '<span style="display:inline-block;width:7px;height:7px;background:#dc2626;border-radius:50%;margin-right:6px;vertical-align:middle"></span>' if is_unread else ""
+            st.markdown(f"""
+            <div style="background:{bg};border:1px solid {border};padding:0.7rem 1rem;margin-bottom:0.5rem">
+              <div style="font-size:0.8rem;font-weight:600;color:#991B1B">{dot}Suspicious activity — {n.get('reason','unknown')}</div>
+              <div style="font-size:0.78rem;color:var(--sub);margin-top:3px">
+                <strong>Student:</strong> {n.get('student','?')} &nbsp;·&nbsp;
+                <strong>Professor targeted:</strong> {n.get('professor','?')} &nbsp;·&nbsp;
+                {n.get('timestamp','')}
+              </div>
+              <div style="font-size:0.8rem;color:var(--txt);margin-top:5px;font-style:italic">
+                &ldquo;{n.get('question','')[:180]}{'…' if len(n.get('question',''))>180 else ''}&rdquo;
+              </div>
+            </div>""", unsafe_allow_html=True)
+            # Mark as read when viewed
+            notifs[len(notifs) - 1 - i]["read"] = True
+
+
+def page_prof_profile():
+    topbar("My Profile", "Professor settings and AI knowledge base")
+
+    tab_info, tab_kb, tab_restricted = st.tabs(["Profile Info", "Knowledge Base", "Restricted Topics"])
+
+    # ── Tab 1: Profile Info ──────────────────────────────────────────────────
+    with tab_info:
+        st.markdown('<div class="sec-head" style="margin-top:0.5rem">Basic information</div>', unsafe_allow_html=True)
+        c1, c2 = st.columns(2)
+        with c1:
+            new_title = st.text_input("Title", value=s.prof_title, key="pp_title")
+            new_name  = st.text_input("Full name", value=s.prof_name,  key="pp_name")
+        with c2:
+            new_dept  = st.text_input("Department / School", value=s.prof_dept,  key="pp_dept")
+            new_email = st.text_input("Email", value=s.prof_email, key="pp_email")
+
+        st.markdown('<div class="sec-head" style="margin-top:1rem">Bio</div>', unsafe_allow_html=True)
+        new_bio = st.text_area(
+            "Short bio shown to students",
+            value=s.prof_bio,
+            height=110,
+            placeholder="Describe your research focus and what kind of students you work best with…",
+            key="pp_bio",
+            label_visibility="collapsed",
+        )
+
+        st.markdown('<div class="sec-head" style="margin-top:1rem">Research areas</div>', unsafe_allow_html=True)
+        new_areas = st.text_input(
+            "Research areas (comma-separated)",
+            value=s.prof_research_areas,
+            placeholder="e.g. Corporate Finance, ESG, Behavioural Economics",
+            key="pp_areas",
+            label_visibility="collapsed",
+        )
+
+        st.markdown('<div class="sec-head" style="margin-top:1rem">Supervision capacity</div>', unsafe_allow_html=True)
+        ca, cb = st.columns(2)
+        with ca:
+            new_max = st.number_input("Max students per year", min_value=0, max_value=20,
+                                      value=int(s.prof_max_students or 5), key="pp_max")
+        with cb:
+            new_avail = st.toggle("Currently accepting students", value=bool(s.prof_available), key="pp_avail")
+
+        if st.button("Save profile", type="primary", key="pp_save"):
+            s.prof_title          = new_title
+            s.prof_name           = new_name
+            s.prof_dept           = new_dept
+            s.prof_email          = new_email
+            s.prof_bio            = new_bio
+            s.prof_research_areas = new_areas
+            s.prof_max_students   = new_max
+            s.prof_available      = new_avail
+            st.success("Profile saved.")
+            st.rerun()
+
+        # Preview card
+        areas_tags = "".join(
+            f'<span class="tag tg">{a.strip()}</span>'
+            for a in (s.prof_research_areas or "").split(",") if a.strip()
+        )
+        avail_pill = ('<span style="background:#dcfce7;color:#166534;font-size:0.72rem;padding:2px 8px;font-weight:600">Accepting students</span>'
+                      if s.prof_available else
+                      '<span style="background:#fee2e2;color:#991b1b;font-size:0.72rem;padding:2px 8px;font-weight:600">Not accepting</span>')
+        st.markdown(f"""
+        <div style="border:1px solid var(--bdr);padding:1.1rem 1.2rem;margin-top:1.2rem;background:var(--bg)">
+          <div style="font-size:0.68rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--mut);margin-bottom:6px">Student preview</div>
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+            <div style="width:36px;height:36px;background:#0D3320;display:flex;align-items:center;
+                        justify-content:center;font-size:0.72rem;font-weight:700;color:white;flex-shrink:0">
+              {"".join(w[0] for w in s.prof_name.split()[:2]).upper() or "PR"}
+            </div>
+            <div>
+              <div style="font-weight:700;font-size:0.92rem">{s.prof_title} {s.prof_name}</div>
+              <div style="font-size:0.78rem;color:var(--mut)">{s.prof_dept} &nbsp;·&nbsp; {avail_pill}</div>
+            </div>
+          </div>
+          <div style="font-size:0.82rem;color:var(--sub);margin-bottom:8px">{s.prof_bio or '<em style="opacity:0.5">No bio yet</em>'}</div>
+          <div>{areas_tags}</div>
+        </div>""", unsafe_allow_html=True)
+
+    # ── Tab 2: Knowledge Base ────────────────────────────────────────────────
+    with tab_kb:
+        st.markdown("""
+        <div style="font-size:0.83rem;color:var(--mut);margin:0.5rem 0 1rem">
+        Upload documents or add free-text knowledge. The AI uses this to answer student questions about
+        your thesis topics, supervision requirements, and research focus.
+        </div>""", unsafe_allow_html=True)
+
+        # Free-text knowledge input
+        st.markdown('<div class="sec-head">Add free-text knowledge</div>', unsafe_allow_html=True)
+        freetext_key = "pp_freetext_input"
+        ft = st.text_area(
+            "Add any information about your research, supervision style, expectations…",
+            height=100,
+            placeholder="e.g. I require students to submit a 1-page outline before our first meeting. I prefer students with strong quantitative backgrounds. My thesis deadlines are always in May.",
+            key=freetext_key,
+            label_visibility="collapsed",
+        )
+        if st.button("Add to knowledge base", key="pp_add_freetext"):
+            if ft.strip():
+                s.prof_faq_bank.append({"question": "[Manual entry]", "answer": ft.strip()})
+                st.success("Added to knowledge base.")
+                st.rerun()
+
+        # File upload (same logic as page_upload_documents)
+        st.markdown('<div class="sec-head" style="margin-top:1rem">Upload documents</div>', unsafe_allow_html=True)
+        st.markdown('<div style="font-size:0.8rem;color:var(--mut);margin-bottom:0.5rem">PDF, Word (.docx), or plain text. AI extracts thesis proposals, FAQ entries, and key topics automatically.</div>', unsafe_allow_html=True)
+        uploaded_kb = st.file_uploader(
+            "Upload document",
+            type=["pdf", "docx", "txt", "md"],
+            key="pp_doc_uploader",
+            label_visibility="collapsed",
+        )
+        if uploaded_kb:
+            with ai_spinner(f"Reading {uploaded_kb.name} and extracting information…"):
+                try:
+                    from src.agents.professor_import_agent import extract_text_from_file, import_professor_document
+                    raw_text = extract_text_from_file(uploaded_kb)
+                    prof_display = f"{s.prof_title} {s.prof_name}" if s.prof_name else "Professor"
+                    result = import_professor_document(raw_text, prof_display, uploaded_kb.name)
+                    s.prof_uploaded_docs.append(result)
+                    for entry in result.get("faq_entries", []):
+                        s.prof_faq_bank.append(entry)
+                    st.success(f"Extracted from {uploaded_kb.name}: {result.get('summary','Done.')}")
+                except Exception as e:
+                    st.error(f"Could not process file: {e}")
+
+        # Show existing entries
+        if s.prof_faq_bank:
+            st.markdown(f'<div class="sec-head" style="margin-top:1rem">Knowledge base ({len(s.prof_faq_bank)} entries)</div>', unsafe_allow_html=True)
+            for j, entry in enumerate(s.prof_faq_bank):
+                ca2, cb2 = st.columns([8, 1])
+                with ca2:
+                    q_label = entry.get("question", "[entry]")
+                    a_text  = entry.get("answer", "")
+                    if q_label == "[Manual entry]":
+                        st.markdown(f'<div style="font-size:0.82rem;color:var(--sub);padding:0.4rem 0;border-bottom:1px solid var(--bdr)">{a_text[:180]}{"…" if len(a_text)>180 else ""}</div>', unsafe_allow_html=True)
+                    else:
+                        st.markdown(f'<div style="font-size:0.83rem;padding:0.4rem 0;border-bottom:1px solid var(--bdr)"><strong>Q:</strong> {q_label}<br><span style="color:var(--mut)">A: {a_text[:140]}{"…" if len(a_text)>140 else ""}</span></div>', unsafe_allow_html=True)
+                with cb2:
+                    if st.button("✕", key=f"rm_kb_{j}"):
+                        s.prof_faq_bank.pop(j); st.rerun()
+
+    # ── Tab 3: Restricted Topics ─────────────────────────────────────────────
+    with tab_restricted:
+        st.markdown("""
+        <div style="background:#FEF2F2;border:1px solid #FECACA;padding:0.8rem 1rem;
+                    font-size:0.83rem;color:#991B1B;margin-bottom:1rem">
+          <strong>Privacy control.</strong> Any information entered here will be injected into the
+          AI system prompt as hard restrictions. The AI will refuse to confirm, share, or hint at
+          these topics when students ask. Suspicious attempts to extract this information are
+          flagged and reported to you as security alerts.
+        </div>""", unsafe_allow_html=True)
+
+        new_restricted = st.text_area(
+            "What should the AI never share or confirm?",
+            value=s.prof_restricted_text,
+            height=160,
+            placeholder=(
+                "Examples:\n"
+                "- Do not confirm or deny the exact number of open thesis slots.\n"
+                "- Do not share details about other applicants or pending applications.\n"
+                "- Do not reveal my travel schedule or sabbatical plans.\n"
+                "- Do not discuss my consulting fees or commercial arrangements."
+            ),
+            key="pp_restricted",
+            label_visibility="collapsed",
+        )
+        st.markdown('<div style="font-size:0.78rem;color:var(--mut);margin-top:4px">One restriction per line. Plain language — the AI will interpret it.</div>', unsafe_allow_html=True)
+
+        # Quick-add examples
+        st.markdown('<div style="font-size:0.78rem;font-weight:600;margin-top:0.8rem;margin-bottom:0.3rem">Quick add:</div>', unsafe_allow_html=True)
+        ex_cols = st.columns(2)
+        examples = [
+            "Do not confirm exact thesis slot availability.",
+            "Do not share details about other applicants.",
+            "Do not reveal my personal schedule or location.",
+            "Do not discuss grading criteria or rubrics.",
+        ]
+        for ei, ex in enumerate(examples):
+            with ex_cols[ei % 2]:
+                if st.button(f"+ {ex}", key=f"pp_ex_{ei}"):
+                    current = (s.prof_restricted_text or "").strip()
+                    s.prof_restricted_text = (current + "\n" + ex).strip()
+                    st.rerun()
+
+        if st.button("Save restrictions", type="primary", key="pp_save_restricted"):
+            s.prof_restricted_text = new_restricted
+            st.success("Restrictions saved. The AI will apply them immediately.")
+            st.rerun()
+
+        # Show current restrictions as a list
+        lines = [l.strip() for l in (s.prof_restricted_text or "").splitlines() if l.strip()]
+        if lines:
+            st.markdown(f'<div class="sec-head" style="margin-top:1rem">Active restrictions ({len(lines)})</div>', unsafe_allow_html=True)
+            for line in lines:
+                st.markdown(f'<div style="font-size:0.82rem;color:var(--sub);padding:0.3rem 0;border-bottom:1px solid var(--bdr)">🚫 {line}</div>', unsafe_allow_html=True)
 
 
 def page_upload_documents():
@@ -2744,13 +3086,15 @@ def page_professor_ai_chat():
     prof_ctx = _prof_context_for(prof_name)
 
     ctx_block = ("PROFESSOR CONTEXT:\n" + prof_ctx) if prof_ctx else "No documents uploaded yet — answer based on general HSG thesis guidelines."
+    restricted = (s.prof_restricted_text or "").strip()
+    restricted_block = ("\n\nRESTRICTED — never share, confirm, or hint at the following:\n" + restricted) if restricted else ""
     system = (
         f"You are the AI assistant for {prof_name} at the University of St. Gallen (HSG). "
         "Students ask you questions about working with this professor on their thesis. "
         "You answer based on the professor's research profile, uploaded documents, and known thesis proposals. "
         "Be concrete, helpful, and concise. If you don't know something specific, say so honestly. "
         "Do NOT invent information about the professor — only use what is provided.\n\n"
-        + ctx_block
+        + ctx_block + restricted_block
     )
 
     # Chat history for this specific professor
@@ -2775,7 +3119,18 @@ def page_professor_ai_chat():
                     history.append({"role": "user", "content": sq})
                     with ai_spinner("Answering…"):
                         from src.agents.professor_chat_agent import ask_professor_ai
-                        reply = ask_professor_ai(sq, history[:-1], system)
+                        result = ask_professor_ai(sq, history[:-1], system)
+                    reply = result["response"] if isinstance(result, dict) else result
+                    if isinstance(result, dict) and result.get("suspicious"):
+                        _DEMO_SHARED["notifications"].append({
+                            "type": "suspicious_ai",
+                            "professor": prof_name,
+                            "student": f"{s.first_name} {s.last_name}".strip() or "Unknown student",
+                            "question": sq,
+                            "reason": result.get("reason", ""),
+                            "timestamp": result.get("timestamp", ""),
+                            "read": False,
+                        })
                     history.append({"role": "assistant", "content": reply})
                     s.prof_ai_chats[prof_name] = history
                     st.rerun()
@@ -2821,9 +3176,20 @@ def page_professor_ai_chat():
                 with ai_spinner("Answering…"):
                     try:
                         from src.agents.professor_chat_agent import ask_professor_ai
-                        reply = ask_professor_ai(q, history[:-1], system)
+                        result = ask_professor_ai(q, history[:-1], system)
                     except Exception as e:
-                        reply = f"[Error: {e}]"
+                        result = {"response": f"[Error: {e}]", "suspicious": False, "reason": "", "timestamp": ""}
+                reply = result["response"] if isinstance(result, dict) else result
+                if isinstance(result, dict) and result.get("suspicious"):
+                    _DEMO_SHARED["notifications"].append({
+                        "type": "suspicious_ai",
+                        "professor": prof_name,
+                        "student": f"{s.first_name} {s.last_name}".strip() or "Unknown student",
+                        "question": q,
+                        "reason": result.get("reason", ""),
+                        "timestamp": result.get("timestamp", ""),
+                        "read": False,
+                    })
                 history.append({"role": "assistant", "content": reply})
                 s.prof_ai_chats[prof_name] = history
                 st.rerun()
@@ -3129,60 +3495,92 @@ st.markdown("""
 <style>
 section[data-testid="stSidebar"] { background-color: #377E39 !important; }
 section[data-testid="stSidebar"] * { color: white !important; }
-section[data-testid="stSidebar"] [data-testid="stSidebarNavLink"] {
-    font-size: 1.05rem !important;
+section[data-testid="stSidebar"] hr { border-color: rgba(255,255,255,0.25) !important; }
+
+/* Manual sidebar nav buttons */
+section[data-testid="stSidebar"] [class*="st-key-sbnav_"] button {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    color: white !important;
+    text-align: left !important;
+    font-size: 1.0rem !important;
     font-weight: 500 !important;
-    padding: 0.5rem 0.9rem !important;
+    padding: 0.45rem 0.9rem !important;
+    border-radius: 0 !important;
+    justify-content: flex-start !important;
+    width: 100% !important;
 }
-section[data-testid="stSidebar"] [data-testid="stSidebarNavLink"][aria-selected="true"] {
+section[data-testid="stSidebar"] [class*="st-key-sbnav_"] button:hover {
+    background: rgba(255,255,255,0.12) !important;
+}
+section[data-testid="stSidebar"] [class*="st-key-sbnav_active_"] button {
     background: rgba(255,255,255,0.20) !important;
     font-weight: 700 !important;
 }
-section[data-testid="stSidebar"] [data-testid="stSidebarNavSeparator"] {
-    font-size: 0.75rem !important;
-    opacity: 0.6 !important;
-    text-transform: uppercase !important;
-    letter-spacing: 0.08em !important;
+section[data-testid="stSidebar"] .sidebar-section-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: rgba(255,255,255,0.6) !important;
+    padding: 0.6rem 0.9rem 0.15rem;
+    margin: 0;
 }
-section[data-testid="stSidebar"] hr { border-color: rgba(255,255,255,0.25) !important; }
+section[data-testid="stSidebar"] .st-key-sidebar_logout_btn button,
+section[data-testid="stSidebar"] .st-key-sidebar_logout_btn button *,
+section[data-testid="stSidebar"] .st-key-sidebar_logout_btn button p {
+    color: #111827 !important;
+    background: white !important;
+    border: none !important;
+    font-weight: 500 !important;
+}
+section[data-testid="stSidebar"] .st-key-sidebar_logout_btn button:hover,
+section[data-testid="stSidebar"] .st-key-sidebar_logout_btn button:hover * {
+    background: #f3f4f6 !important;
+    color: #111827 !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
-def _unpin(fn):
-    """Wrap a page function so clicking it in the sidebar clears _pinned_page."""
-    def _wrapper():
-        st.session_state.pop("_pinned_page", None)
-        fn()
-    _wrapper.__name__ = fn.__name__
-    return _wrapper
+# ── Sidebar — manual nav buttons (replaces st.navigation to avoid freeze) ─────
+# When nav used st.navigation() + st.stop(), sidebar clicks never reached
+# nav.run(), so _unpin() wrappers were never called → app appeared frozen.
+# Manual buttons directly set _pinned_page and rerun — always works.
 
-if s.role == "professor":
-    nav = st.navigation({
-        "Professor Portal": [
-            st.Page(_unpin(page_prof_home),        title="Dashboard",            default=True),
-            st.Page(_unpin(page_messages),         title="Student Applications"),
-            st.Page(_unpin(page_upload_documents), title="Upload Documents"),
-            st.Page(_unpin(page_ai_assistant),     title="AI Assistant"),
-        ]
-    }, position="sidebar")
-else:
-    nav = st.navigation({
-        "Student Portal": [
-            st.Page(_unpin(page_home),             title="Dashboard",        default=True),
-        ],
-        "Discover": [
-            st.Page(_unpin(page_match),            title="Find Supervisor"),
-            st.Page(_unpin(page_topics),           title="Thesis Topics"),
-            st.Page(_unpin(page_professors),       title="Professors"),
-        ],
-        "My Work": [
-            st.Page(_unpin(page_messages),         title="Messages"),
-            st.Page(_unpin(page_ai_assistant),     title="AI Assistant"),
-            st.Page(_unpin(page_profile),          title="My Profile"),
-        ],
-    }, position="sidebar")
+def _sb_nav(label, page, key_suffix):
+    """Render one sidebar nav button. Active page gets highlighted styling."""
+    _cur = st.session_state.get("_pinned_page") or st.session_state.get("_nav_target") or "Home"
+    active = (_cur == page)
+    k = f"sbnav_active_{key_suffix}" if active else f"sbnav_{key_suffix}"
+    if st.sidebar.button(label, key=k, use_container_width=True):
+        st.session_state["_pinned_page"] = page
+        st.session_state.pop("_nav_target", None)
+        st.rerun()
+
+def _sb_section(title):
+    st.sidebar.markdown(f'<p class="sidebar-section-label">{title}</p>', unsafe_allow_html=True)
 
 with st.sidebar:
+    if s.role == "professor":
+        _sb_section("Professor Portal")
+        _sb_nav("Dashboard",            "Home",             "home")
+        _sb_nav("My Profile",           "Prof Profile",     "profprofile")
+        _sb_nav("Knowledge Base",       "Upload Documents", "docs")
+        _sb_nav("Student Applications", "Messages",         "msgs")
+        _sb_nav("Thesis General FAQ",   "AI Assistant",     "ai")
+    else:
+        _sb_section("Student Portal")
+        _sb_nav("Dashboard",        "Home",           "home")
+        _sb_section("Discover")
+        _sb_nav("Find Supervisor",  "Find Supervisor","match")
+        _sb_nav("Thesis Topics",    "Thesis Topics",  "topics")
+        _sb_nav("Professors List",  "Professors",     "profs")
+        _sb_section("My Work")
+        _sb_nav("Messages",         "Messages",       "msgs")
+        _sb_nav("Thesis General FAQ","AI Assistant",   "ai")
+        _sb_nav("My Profile",       "My Profile",     "profile")
+
     st.divider()
     if s.role == "student":
         st.caption(f"{s.first_name} {s.last_name}".strip() or s.firebase_user.get("email", ""))
@@ -3195,23 +3593,23 @@ with st.sidebar:
             del st.session_state[k]
         st.rerun()
 
-# Persistent programmatic navigation — survives internal reruns until the user
-# clicks a real sidebar link (which sets _clear_pinned via nav page wrappers).
+# ── Router ────────────────────────────────────────────────────────────────────
+# Promote _nav_target → _pinned_page (set by in-page buttons throughout the app)
 if st.session_state.get("_nav_target"):
     st.session_state["_pinned_page"] = st.session_state.pop("_nav_target")
 
-_pinned = st.session_state.get("_pinned_page")
-if _pinned:
-    if   _pinned == "Home":               page_prof_home() if s.role == "professor" else page_home()
-    elif _pinned == "Messages":           page_messages()
-    elif _pinned == "Professors":         page_professors()
-    elif _pinned == "Thesis Topics":      page_topics()
-    elif _pinned == "My Profile":         page_profile()
-    elif _pinned == "Upload Documents":   page_upload_documents()
-    elif _pinned == "AI Assistant":       page_ai_assistant()
-    elif _pinned == "Feedback":           page_feedback()
-    elif _pinned == "Professor AI Chat":  page_professor_ai_chat()
-    else:                                 st.session_state.pop("_pinned_page", None)
-    st.stop()
-
-nav.run()
+_pinned = st.session_state.get("_pinned_page") or "Home"
+if   _pinned == "Home":               page_prof_home() if s.role == "professor" else page_home()
+elif _pinned == "Messages":           page_messages()
+elif _pinned == "Find Supervisor":    page_match()
+elif _pinned == "Professors":         page_professors()
+elif _pinned == "Thesis Topics":      page_topics()
+elif _pinned == "My Profile":         page_profile()
+elif _pinned == "Prof Profile":       page_prof_profile()
+elif _pinned == "Upload Documents":   page_upload_documents()
+elif _pinned == "AI Assistant":       page_ai_assistant()
+elif _pinned == "Feedback":           page_feedback()
+elif _pinned == "Professor AI Chat":  page_professor_ai_chat()
+else:
+    st.session_state["_pinned_page"] = "Home"
+    page_prof_home() if s.role == "professor" else page_home()
